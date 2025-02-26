@@ -14,3 +14,14 @@ class User(db.Model, UserMixin):
 
     def __repr__(self):
         return f"User('{self.username}', '{self.email}', '{self.role}')"
+    
+    class Product(db.Model):
+     id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), default='pending')  # 'pending', 'approved', 'rejected'
+    seller_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    def __repr__(self):
+        return f"Product('{self.name}', '{self.price}', '{self.status}')"

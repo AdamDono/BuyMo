@@ -14,9 +14,12 @@ def create_app():
     login_manager.init_app(app)
 
     # Register blueprints (routes)
-    from app.routes import main_routes  # Import main_routes from routes.py
-    from app.auth import auth_routes    # Import auth_routes from auth.py
+    from app.routes import main_routes
+    from app.auth import auth_routes
+    from app.admin import admin_routes
+    from app.seller import seller_routes
     app.register_blueprint(main_routes)
     app.register_blueprint(auth_routes)
-
+    app.register_blueprint(admin_routes)
+    app.register_blueprint(seller_routes)
     return app

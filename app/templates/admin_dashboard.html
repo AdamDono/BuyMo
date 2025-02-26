@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Admin Dashboard</h1>
+<h2>Pending Products</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Price</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for product in pending_products %}
+        <tr>
+            <td>{{ product.name }}</td>
+            <td>{{ product.description }}</td>
+            <td>${{ product.price }}</td>
+            <td>
+                <a href="{{ url_for('admin_routes.approve_product', product_id=product.id) }}" class="btn btn-success">Approve</a>
+                <a href="{{ url_for('admin_routes.reject_product', product_id=product.id) }}" class="btn btn-danger">Reject</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

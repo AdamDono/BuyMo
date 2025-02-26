@@ -40,11 +40,20 @@ def login():
         if user and user.password == password:
             login_user(user)
             flash('Logged in successfully!', 'success')
-            return redirect(url_for('main_routes.index'))
+
+            # Redirect based on role
+            if user.role == 'admin':
+                return redirect(url_for('admin_routes.admin_dashboard'))
+            elif user.role == 'seller':
+                return redirect(url_for('seller_routes.seller_dashboard'))
+            else:
+                return redirect(url_for('main_routes.index'))
+
         else:
             flash('Invalid email or password!', 'error')
 
     return render_template('login.html')
+
 
 @auth_routes.route('/logout')
 @login_required
