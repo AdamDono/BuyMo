@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Welcome to the E-Commerce Platform</h1>
+<p>This is the home page.</p>
+<a href="{{ url_for('auth_routes.register') }}" class="btn btn-primary">Register</a>
+<a href="{{ url_for('auth_routes.login') }}" class="btn btn-success">Login</a>
+{% endblock %}
