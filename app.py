@@ -46,5 +46,21 @@ def add_product():
         return redirect(url_for('index'))
     return render_template('add_product.html')
 
+@app.route('/get-started')
+def get_started():
+    return render_template('get_started.html')
+
+@app.route('/signup')
+def signup():
+    return render_template('signup.html')
+
+@app.route('/login')
+def login():
+    return render_template('login.html')
+
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
