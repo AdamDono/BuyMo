@@ -29,6 +29,16 @@
             </form>
             <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a>.</p>
         </div>
+        <!-- Add this inside the <main> tag of signup.html and login.html -->
+{% with messages = get_flashed_messages() %}
+{% if messages %}
+    <div class="flash-messages">
+        {% for message in messages %}
+            <p>{{ message }}</p>
+        {% endfor %}
+    </div>
+{% endif %}
+{% endwith %}
     </main>
 </body>
 </html>
