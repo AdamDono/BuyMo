@@ -28,8 +28,10 @@
         <div class="products">
             {% for product in products %}
             <div class="product">
-                <h3><a href="{{ url_for('product', product_id=product[0]) }}">{{ product[1] }}</a></h3>
+                <h3>{{ product[1] }}</h3>
                 <p>${{ product[2] }}</p>
+                <p>{{ product[3] }}</p>
+                <img src="{{ product[4] }}" alt="{{ product[1] }}">
             </div>
             {% endfor %}
         </div>
