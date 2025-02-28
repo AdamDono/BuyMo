@@ -1,21 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import database
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 app = Flask(__name__)
 app.secret_key = 'Fliph106'  # Required for session management
 
-# Homepage - Display all products
-@app.route('/')
-def index():
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    cur.execute('SELECT * FROM products;')
-    products = cur.fetchall()
-    cur.close()
-    conn.close()
-    return render_template('index.html', products=products)
+
 
 
 @app.route('/')
