@@ -31,94 +31,7 @@ nav a {
     background: #0056b3;
 }
 
-/* Get Started Page */
-.get-started-container {
-    text-align: center;
-    margin: 50px auto;
-    max-width: 400px;
-    padding: 20px;
-    background: #fff;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.auth-options {
-    display: flex;
-    justify-content: space-around;
-    margin-top: 20px;
-}
-
-.btn {
-    background: #007bff;
-    color: #fff;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.btn:hover {
-    background: #0056b3;
-}
-
-/* Auth Pages */
-.auth-container {
-    max-width: 400px;
-    margin: 50px auto;
-    padding: 20px;
-    background: #fff;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.auth-container h2 {
-    text-align: center;
-    margin-bottom: 20px;
-}
-
-.auth-container form {
-    display: flex;
-    flex-direction: column;
-}
-
-.auth-container label {
-    margin-bottom: 5px;
-}
-
-.auth-container input {
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-}
-
-.auth-container button {
-    background: #007bff;
-    color: #fff;
-    padding: 10px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-.auth-container button:hover {
-    background: #0056b3;
-}
-
-.auth-container p {
-    text-align: center;
-    margin-top: 15px;
-}
-
-.auth-container a {
-    color: #007bff;
-    text-decoration: none;
-}
-
-.auth-container a:hover {
-    text-decoration: underline;
-}
+/* Product Cards */
 .products {
     display: flex;
     flex-wrap: wrap;
@@ -130,5 +43,32 @@ nav a {
     border: 1px solid #ccc;
     padding: 10px;
     width: 200px;
-    text-align: center;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column; /* Stack children vertically */
+}
+
+.product img {
+    width: 100%; /* Make the image fill the container */
+    height: 150px; /* Set a fixed height */
+    object-fit: cover; /* Ensure the image covers the area without distortion */
+    border-radius: 5px;
+}
+
+.product h3 {
+    margin: 10px 0;
+    font-size: 1.2em;
+}
+
+.product p {
+    margin: 5px 0;
+    font-size: 0.9em;
+    color: #555;
+}
+
+/* Push text to the bottom */
+.product .details {
+    margin-top: auto; /* Push details to the bottom */
 }

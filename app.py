@@ -2,10 +2,18 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import database
 from werkzeug.security import generate_password_hash, check_password_hash
-
+from werkzeug.utils import secure_filename
+import os
 
 app = Flask(__name__)
 app.secret_key = 'Fliph106'  # Required for session management
+
+# Configure upload folder and allowed extensions
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 
 
@@ -25,33 +33,52 @@ def product(product_id):
     conn.close()
     return render_template('product.html', product=product)
 
-# Add a new product
+
 @app.route('/add', methods=['GET', 'POST'])
 @login_required
 def add_product():
-    print(f"Current User: {current_user.username}, Is Admin: {current_user.is_admin}")  # Debug
     if not current_user.is_admin:
         flash('You do not have permission to access this page.')
         return redirect(url_for('home'))
+
+    # Fetch categories from the database
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM categories;')
+    categories = cur.fetchall()
+    cur.close()
+    conn.close()
 
     if request.method == 'POST':
         name = request.form.get('name')
         price = request.form.get('price')
         description = request.form.get('description')
-        image = request.form.get('image')
+        category_id = request.form.get('category')
+        image = request.files.get('image')
 
-        print(f"Form Data: Name={name}, Price={price}, Description={description}, Image={image}")  # Debug
-
-        if not name or not price:
-            flash('Name and Price are required.')
+        # Validate required fields
+        if not name or not price or not category_id:
+            flash('Name, Price, and Category are required.')
             return redirect(url_for('add_product'))
 
+        # Handle image upload
+        image_url = None
+        if image and allowed_file(image.filename):
+            filename = secure_filename(image.filename)
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            image.save(image_path)
+            image_url = f"uploads/{filename}"  # Relative path for the database
+        else:
+            flash('Invalid or missing image file.')
+            return redirect(url_for('add_product'))
+
+        # Insert product into the database
         try:
             conn = database.get_db_connection()
             cur = conn.cursor()
             cur.execute(
-                'INSERT INTO products (name, price, description, image) VALUES (%s, %s, %s, %s);',
-                (name, float(price), description, image)
+                'INSERT INTO products (name, price, description, image, category_id) VALUES (%s, %s, %s, %s, %s);',
+                (name, float(price), description, image_url, int(category_id))
             )
             conn.commit()
             cur.close()
@@ -63,8 +90,7 @@ def add_product():
             flash('An error occurred while adding the product.')
             return redirect(url_for('add_product'))
 
-    return render_template('add_product.html')
-
+    return render_template('add_product.html', categories=categories)
 @app.route('/get-started')
 def get_started():
     return render_template('get_started.html')
@@ -143,12 +169,15 @@ def load_user(user_id):
 def home():
     conn = database.get_db_connection()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM products;')
+    cur.execute('''
+        SELECT p.id, p.name, p.price, p.description, p.image, c.name 
+        FROM products p
+        JOIN categories c ON p.category_id = c.id;
+    ''')
     products = cur.fetchall()
     cur.close()
     conn.close()
     return render_template('home.html', products=products, username=current_user.username)
-
 
 def create_user(username, email, password, is_admin=False):
     conn = get_db_connection()

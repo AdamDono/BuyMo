@@ -28,10 +28,13 @@
         <div class="products">
             {% for product in products %}
             <div class="product">
-                <h3>{{ product[1] }}</h3>
-                <p>${{ product[2] }}</p>
-                <p>{{ product[3] }}</p>
-                <img src="{{ product[4] }}" alt="{{ product[1] }}">
+                <img src="{{ url_for('static', filename=product[4]) }}" alt="{{ product[1] }}">
+                <div class="details">
+                    <h3>{{ product[1] }}</h3>
+                    <p>${{ product[2] }}</p>
+                    <p>{{ product[3] }}</p>
+                    <p><strong>Category:</strong> {{ product[5] }}</p>
+                </div>
             </div>
             {% endfor %}
         </div>
