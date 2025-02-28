@@ -17,6 +17,13 @@ def index():
     conn.close()
     return render_template('index.html', products=products)
 
+
+@app.route('/')
+@login_required
+def index():
+    return render_template('index.html', username=current_user.username)
+
+
 # Product page - Display a single product
 @app.route('/product/<int:product_id>')
 def product(product_id):
@@ -53,15 +60,47 @@ def add_product():
 def get_started():
     return render_template('get_started.html')
 
-@app.route('/signup')
+@app.route('/signup', methods=['GET', 'POST'])
 def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+
+        # Check if user already exists
+        user = database.get_user_by_email(email)
+        if user:
+            flash('Email already registered. Please login.')
+            return redirect(url_for('login'))
+
+        # Create new user
+        database.create_user(username, email, password)
+        flash('Registration successful! Please login.')
+        return redirect(url_for('login'))
     return render_template('signup.html')
 
-@app.route('/login')
+@app.route('/login', methods=['GET', 'POST'])
 def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+
+        user_data = database.get_user_by_email(email)
+        if user_data and check_password_hash(user_data[3], password):
+            user = User(id=user_data[0], username=user_data[1], email=user_data[2])
+            login_user(user)
+            flash('Login successful!')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid email or password.')
     return render_template('login.html')
 
-
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out.')
+    return redirect(url_for('index'))
 
 # Flask-Login setup
 login_manager = LoginManager()
