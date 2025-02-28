@@ -29,27 +29,40 @@ def product(product_id):
 @app.route('/add', methods=['GET', 'POST'])
 @login_required
 def add_product():
-    if not current_user.is_admin:  # Check if the user is an admin
+    print(f"Current User: {current_user.username}, Is Admin: {current_user.is_admin}")  # Debug
+    if not current_user.is_admin:
         flash('You do not have permission to access this page.')
         return redirect(url_for('home'))
 
     if request.method == 'POST':
-        name = request.form['name']
-        price = request.form['price']
-        description = request.form['description']
-        image = request.form['image']
+        name = request.form.get('name')
+        price = request.form.get('price')
+        description = request.form.get('description')
+        image = request.form.get('image')
 
-        conn = database.get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            'INSERT INTO products (name, price, description, image) VALUES (%s, %s, %s, %s);',
-            (name, price, description, image)
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-        flash('Product added successfully!')
-        return redirect(url_for('home'))
+        print(f"Form Data: Name={name}, Price={price}, Description={description}, Image={image}")  # Debug
+
+        if not name or not price:
+            flash('Name and Price are required.')
+            return redirect(url_for('add_product'))
+
+        try:
+            conn = database.get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                'INSERT INTO products (name, price, description, image) VALUES (%s, %s, %s, %s);',
+                (name, float(price), description, image)
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+            flash('Product added successfully!')
+            return redirect(url_for('home'))
+        except Exception as e:
+            print(f"Error: {e}")  # Debug
+            flash('An error occurred while adding the product.')
+            return redirect(url_for('add_product'))
+
     return render_template('add_product.html')
 
 @app.route('/get-started')
@@ -106,6 +119,7 @@ class User(UserMixin):
         self.id = id
         self.username = username
         self.email = email
+        self.is_admin = is_admin 
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -116,7 +130,7 @@ def load_user(user_id):
     cur.close()
     conn.close()
     if user_data:
-        return User(id=user_data[0], username=user_data[1], email=user_data[2])
+        return User(id=user_data[0], username=user_data[1], email=user_data[2],  is_admin=user_data[4])
     return None
 
 
