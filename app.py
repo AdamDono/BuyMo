@@ -94,7 +94,8 @@ def login():
 
         user_data = database.get_user_by_email(email)
         if user_data and check_password_hash(user_data[3], password):
-            user = User(id=user_data[0], username=user_data[1], email=user_data[2])
+            user = User(id=user_data[0], username=user_data[1], email=user_data[2],                 is_admin=user_data[4]  # Add this line
+)
             login_user(user)
             flash('Login successful!')
             return redirect(url_for('home'))  # Redirect to home after login
@@ -115,7 +116,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 class User(UserMixin):
-    def __init__(self, id, username, email):
+    def __init__(self, id, username, email, is_admin):
         self.id = id
         self.username = username
         self.email = email
@@ -130,7 +131,10 @@ def load_user(user_id):
     cur.close()
     conn.close()
     if user_data:
-        return User(id=user_data[0], username=user_data[1], email=user_data[2],  is_admin=user_data[4])
+      return User(id=user_data[0],
+                  username=user_data[1],
+                  email=user_data[2], 
+                  is_admin=user_data[4])
     return None
 
 
