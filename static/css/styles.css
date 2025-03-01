@@ -5,6 +5,23 @@ body {
     padding: 0;
     background-color: #f4f4f9;
     color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+body {
+    background: linear-gradient(135deg, #6a11cb, #2575fc);
+}
+
+.auth-container {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 header {
@@ -12,6 +29,9 @@ header {
     color: #fff;
     padding: 10px 20px;
     text-align: center;
+    position: fixed;
+    top: 0;
+    width: 100%;
 }
 
 nav a {
@@ -31,6 +51,88 @@ nav a {
     background: #0056b3;
 }
 
+/* Auth Pages */
+.auth-container {
+    background: #fff;
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.auth-container h2 {
+    margin-bottom: 1.5rem;
+    font-size: 1.8em;
+    color: #333;
+}
+
+.auth-container form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.auth-container label {
+    font-size: 0.9em;
+    color: #555;
+    text-align: left;
+}
+
+.auth-container input {
+    padding: 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1em;
+}
+
+.auth-container input:focus {
+    border-color: #007bff;
+    outline: none;
+}
+
+.auth-container button {
+    background: #007bff;
+    color: #fff;
+    padding: 0.8rem;
+    border: none;
+    border-radius: 5px;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+.auth-container button:hover {
+    background: #0056b3;
+}
+
+.auth-container p {
+    margin-top: 1rem;
+    font-size: 0.9em;
+    color: #555;
+}
+
+.auth-container a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.auth-container a:hover {
+    text-decoration: underline;
+}
+
+/* Flash Messages */
+.flash-messages {
+    margin-bottom: 1rem;
+}
+
+.flash-messages p {
+    background: #ffebee;
+    color: #c62828;
+    padding: 0.5rem;
+    border-radius: 5px;
+    font-size: 0.9em;
+}
 /* Product Cards */
 .products {
     display: flex;
