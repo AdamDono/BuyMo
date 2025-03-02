@@ -207,26 +207,24 @@ nav a {
     color: #333;
 }
 
-.product-info p {
-    font-size: 1.1em;
-    margin: 0.5rem 0;
-    color: #555;
-}
-
 .product-info .price {
     font-size: 1.5em;
     font-weight: bold;
     color: #007bff;
+    margin-bottom: 1rem;
 }
 
 .product-info .description {
-    margin-top: 1.5rem;
+    font-size: 1.1em;
+    color: #555;
     line-height: 1.8;
+    margin-bottom: 1.5rem;
 }
 
 .product-info .category {
     font-style: italic;
     color: #777;
+    margin-bottom: 1.5rem;
 }
 
 .actions {
