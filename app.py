@@ -190,32 +190,41 @@ def create_user(username, email, password, is_admin=False):
     conn.commit()
     cur.close()
     conn.close()
-
 @app.route('/product/<int:product_id>')
 def product_details(product_id):
     conn = database.get_db_connection()
     cur = conn.cursor()
+
+    # Fetch the current product
     cur.execute('''
-        SELECT p.id, p.name, p.price, p.description, p.image, c.name 
+        SELECT p.id, p.name, p.image, p.price, p.description, c.name 
         FROM products p
         JOIN categories c ON p.category_id = c.id
         WHERE p.id = %s;
     ''', (product_id,))
     product = cur.fetchone()
+
+    # Fetch related products (from the same category)
+    if product:
+        cur.execute('''
+            SELECT p.id, p.name, p.image, p.price 
+            FROM products p
+            WHERE p.category_id = (SELECT category_id FROM products WHERE id = %s)
+            AND p.id != %s
+            LIMIT 4;
+        ''', (product_id, product_id))
+        related_products = cur.fetchall()
+    else:
+        related_products = []
+
     cur.close()
     conn.close()
 
     if product:
-        print(f"Product Image Path: {product[2]}") 
-        return render_template('product_details.html', product=product)
+        return render_template('product_details.html', product=product, related_products=related_products)
     else:
         flash('Product not found.')
         return redirect(url_for('home'))
-
-
-
-
-
 
 
 

@@ -25,15 +25,24 @@
     </header>
     <main>
         <div class="product-details">
-            <!-- Use url_for to generate the correct image path -->
-            <img src="{{ url_for('static', filename=product[2]) }}" alt="{{ product[1] }}">
-            <div class="details">
-                <h2>{{ product[1] }}</h2>
-                <p><strong>Price:</strong> ${{ product[2] }}</p>
-                <p><strong>Description:</strong> {{ product[3] }}</p>
-                <p><strong>Category:</strong> {{ product[5] }}</p>
+            <!-- Product Image -->
+            <div class="product-image">
+                <img src="{{ url_for('static', filenjuame=product[2]) }}" alt="{{ product[1] }}">
             </div>
-            <a href="{{ url_for('home') }}" class="btn">Back to Home</a>
+
+            <!-- Product Information -->
+            <div class="product-info">
+                <h2>{{ product[1] }}</h2>
+                <p class="price">${{ product[3] }}</p>
+                <p class="description">{{ product[4] }}</p>
+                <p class="category"><strong>Category:</strong> {{ product[5] }}</p>
+
+                <!-- Actions -->
+                <div class="actions">
+                    <button class="btn">Buy Now</button>
+                    <button class="btn wishlist">Add to Wishlist</button>
+                </div>
+            </div>
         </div>
     </main>
 </body>
