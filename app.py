@@ -206,7 +206,7 @@ def product_details(product_id):
     conn.close()
 
     if product:
-        print(f"Product Image Path: {product[4]}") 
+        print(f"Product Image Path: {product[2]}") 
         return render_template('product_details.html', product=product)
     else:
         flash('Product not found.')
