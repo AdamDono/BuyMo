@@ -191,5 +191,36 @@ def create_user(username, email, password, is_admin=False):
     cur.close()
     conn.close()
 
+@app.route('/product/<int:product_id>')
+def product_details(product_id):
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT p.id, p.name, p.price, p.description, p.image, c.name 
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        WHERE p.id = %s;
+    ''', (product_id,))
+    product = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if product:
+        return render_template('product_details.html', product=product)
+    else:
+        flash('Product not found.')
+        return redirect(url_for('home'))
+
+
+
+
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
