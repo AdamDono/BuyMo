@@ -11,9 +11,6 @@ body {
     height: 100vh;
 }
 
-body {
-    background: linear-gradient(135deg, #6a11cb, #2575fc);
-}
 
 .auth-container {
     animation: fadeIn 0.5s ease-in-out;
