@@ -79,7 +79,7 @@ def add_product():
             cur.execute(
                 'INSERT INTO products (name, price, description, image, category_id) VALUES (%s, %s, %s, %s, %s);',
                 (name, float(price), description, image_url, int(category_id))
-            )
+            )  # <-- Closing parenthesis was missing here
             conn.commit()
             cur.close()
             conn.close()
@@ -206,6 +206,7 @@ def product_details(product_id):
     conn.close()
 
     if product:
+        print(f"Product Image Path: {product[4]}") 
         return render_template('product_details.html', product=product)
     else:
         flash('Product not found.')

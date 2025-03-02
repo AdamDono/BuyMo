@@ -11,9 +11,7 @@ body {
     height: 100vh;
 }
 
-body {
-    background: linear-gradient(135deg, #6a11cb, #2575fc);
-}
+
 
 .auth-container {
     animation: fadeIn 0.5s ease-in-out;
@@ -173,4 +171,54 @@ nav a {
 /* Push text to the bottom */
 .product .details {
     margin-top: auto; /* Push details to the bottom */
+}
+
+/* Product Details Page */
+.product-details {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 2rem;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    margin: 2rem auto;
+}
+
+.product-details img {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    border-radius: 10px;
+}
+
+.product-details .details {
+    text-align: center;
+}
+
+.product-details h2 {
+    font-size: 2em;
+    margin-bottom: 1rem;
+}
+
+.product-details p {
+    font-size: 1.1em;
+    margin: 0.5rem 0;
+}
+
+.product-details .btn {
+    background: #007bff;
+    color: #fff;
+    padding: 0.8rem 1.5rem;
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+.product-details .btn:hover {
+    background: #0056b3;
 }

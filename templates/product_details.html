@@ -26,6 +26,7 @@
     <main>
         <div class="product-details">
             <img src="{{ url_for('static', filename=product[4]) }}" alt="{{ product[1] }}">
+            <p>Image Path: {{ product[4] }}</p>  <!-- Debug -->
             <div class="details">
                 <h2>{{ product[1] }}</h2>
                 <p><strong>Price:</strong> ${{ product[2] }}</p>
