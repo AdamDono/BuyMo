@@ -22,18 +22,41 @@ def index():
     return redirect(url_for('signup'))
 
 
-# Product page - Display a single product
 @app.route('/product/<int:product_id>')
 def product(product_id):
     conn = database.get_db_connection()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM products WHERE id = %s;', (product_id,))
+
+    # Fetch the current product
+    cur.execute('''
+        SELECT p.id, p.name, p.price, p.description, p.image, c.id, c.name 
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        WHERE p.id = %s;
+    ''', (product_id,))
     product = cur.fetchone()
+
+    # Fetch related products (from the same category)
+    if product:
+        cur.execute('''
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name 
+            FROM products p
+            JOIN categories c ON p.category_id = c.id
+            WHERE p.category_id = %s AND p.id != %s
+            LIMIT 4;
+        ''', (product[5], product_id))  # product[5] is the category ID
+        related_products = cur.fetchall()
+    else:
+        related_products = []
+
     cur.close()
     conn.close()
-    return render_template('product.html', product=product)
 
-
+    if product:
+        return render_template('product.html', product=product, related_products=related_products)
+    else:
+        flash('Product not found.')
+        return redirect(url_for('home'))
 @app.route('/add', methods=['GET', 'POST'])
 @login_required
 def add_product():
@@ -191,25 +214,6 @@ def create_user(username, email, password, is_admin=False):
     cur.close()
     conn.close()
 
-@app.route('/product/<int:product_id>')
-def product_details(product_id):
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    cur.execute('''
-        SELECT p.id, p.name, p.image, p.price, p.description, c.name 
-        FROM products p
-        JOIN categories c ON p.category_id = c.id
-        WHERE p.id = %s;
-    ''', (product_id,))
-    product = cur.fetchone()
-    cur.close()
-    conn.close()
-
-    if product:
-        return render_template('product_details.html', product=product)
-    else:
-        flash('Product not found.')
-        return redirect(url_for('home'))
 
 
 

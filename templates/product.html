@@ -24,27 +24,35 @@
             {% endif %}
         </nav>
     </header>
-    <main>
-        <div class="product-details">
-            <!-- Product Image -->
-            <div class="product-image">
-                <img src="{{ url_for('static', filename=product[2]) }}" alt="{{ product[1] }}">
-            </div>
+<!-- Main Product Details -->
+<div class="product-details">
+    <div class="product-image">
+        <img src="{{ url_for('static', filename=product[4]) }}" alt="{{ product[1] }}">
+    </div>
+    <div class="product-info">
+        <h2>{{ product[1] }}</h2>
+        <p class="price">${{ product[2] }}</p>
+        <p class="description">{{ product[3] }}</p>
+        <p class="category"><strong>Category:</strong> {{ product[6] }}</p>
+        <button class="btn">Buy Now</button>
+        <button class="btn wishlist">Add to Wishlist</button>
+    </div>
+</div>
 
-            <!-- Product Information -->
-            <div class="product-info">
-                <h2>{{ product[1] }}</h2>
-                <p class="price">${{ product[3] }}</p>
-                <p class="description">{{ product[4] }}</p>
-                <p class="category"><strong>Category:</strong> {{ product[5] }}</p>
-
-                <!-- Actions -->
-                <div class="actions">
-                    <button class="btn">Buy Now</button>
-                    <button class="btn wishlist">Add to Wishlist</button>
-                </div>
-            </div>
+<!-- Related Products Section -->
+<div class="related-products">
+    <h3>Related Products</h3>
+    <div class="related-products-grid">
+        {% for related_product in related_products %}
+        <div class="related-product-card">
+            <a href="{{ url_for('product', product_id=related_product[0]) }}">
+                <img src="{{ url_for('static', filename=related_product[4]) }}" alt="{{ related_product[1] }}">
+                <h4>{{ related_product[1] }}</h4>
+                <p class="price">${{ related_product[2] }}</p>
+            </a>
         </div>
-    </main>
+        {% endfor %}
+    </div>
+</div>
 </body>
 </html>
