@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
+    <title>{{ product[1] }} - My E-Commercehuu Store</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
     <header>
-        <h1>My E-Commerce Store</h1>
+        <h1>My E-Commerceh Store</h1>
         <nav>
             <a href="{{ url_for('home') }}">Home</a>
             {% if current_user.is_authenticated and current_user.is_admin %}
@@ -24,21 +24,25 @@
         </nav>
     </header>
     <main>
-        <h2>Products</h2>
-        <div class="products">
-            {% for product in products %}
-            <a href="{{ url_for('product_details', product_id=product[0]) }}" class="product-link">
-                <div class="product">
-                    <img src="{{ url_for('static', filename=product[4]) }}" alt="{{ product[1] }}">
-                    <div class="details">
-                        <h3>{{ product[1] }}</h3>
-                        <p>${{ product[2] }}</p>
-                        <p>{{ product[3] }}</p>
-                        <p><strong>Category:</strong> {{ product[5] }}</p>
-                    </div>
+        <div class="product-details">
+            <!-- Product Image -->
+            <div class="product-image">
+                <img src="{{ url_for('static', filename=product[2]) }}" alt="{{ product[1] }}">
+            </div>
+
+            <!-- Product Information -->
+            <div class="product-info">
+                <h2>{{ product[1] }}</h2>
+                <p class="price">${{ product[3] }}</p>
+                <p class="description">{{ product[4] }}</p>
+                <p class="category"><strong>Category:</strong> {{ product[5] }}</p>
+
+                <!-- Actions -->
+                <div class="actions">
+                    <button class="btn">Buy Now</button>
+                    <button class="btn wishlist">Add to Wishlist</button>
                 </div>
-            </a>
-            {% endfor %}
+            </div>
         </div>
     </main>
 </body>
