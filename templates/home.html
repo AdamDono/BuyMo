@@ -27,7 +27,7 @@
         <h2>Products</h2>
         <div class="products">
             {% for product in products %}
-            <a href="{{ url_for('product_details', product_id=product[0]) }}" class="product-link">
+            <a href="{{ url_for('product', product_id=product[0]) }}" class="product-link">
                 <div class="product">
                     <img src="{{ url_for('static', filename=product[4]) }}" alt="{{ product[1] }}">
                     <div class="details">
