@@ -5,6 +5,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
 
+# Create tables if they don't exist
+database.create_tables()
+
+# Create tables if they don't exist
+database.create_tables()
 app = Flask(__name__)
 app.secret_key = 'Fliph106'  # Required for session management
 
@@ -49,14 +54,53 @@ def product(product_id):
     else:
         related_products = []
 
+    # Fetch reviews for the product
+    cur.execute('''
+        SELECT r.rating, r.comment, u.username, r.created_at 
+        FROM reviews r
+        JOIN users u ON r.user_id = u.id
+        WHERE r.product_id = %s
+        ORDER BY r.created_at DESC;
+    ''', (product_id,))
+    reviews = cur.fetchall()
+
     cur.close()
     conn.close()
 
     if product:
-        return render_template('product.html', product=product, related_products=related_products)
+        return render_template('product.html', product=product, related_products=related_products, reviews=reviews)
     else:
         flash('Product not found.')
         return redirect(url_for('home'))
+# Route to submit a review
+@app.route('/product/<int:product_id>/review', methods=['POST'])
+@login_required
+def submit_review(product_id):
+    rating = request.form.get('rating')
+    comment = request.form.get('comment')
+
+    if not rating or not comment:
+        flash('Please provide a rating and comment.')
+        return redirect(url_for('product', product_id=product_id))
+
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute('''
+            INSERT INTO reviews (product_id, user_id, rating, comment)
+            VALUES (%s, %s, %s, %s);
+        ''', (product_id, current_user.id, int(rating), comment))
+        conn.commit()
+        flash('Review submitted successfully!')
+    except Exception as e:
+        print(f"Error: {e}")
+        flash('An error occurred while submitting the review.')
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('product', product_id=product_id)) 
 @app.route('/add', methods=['GET', 'POST'])
 @login_required
 def add_product():

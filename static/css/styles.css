@@ -436,3 +436,81 @@ nav a {
     border-radius: 5px;
     cursor: pointer;
 }
+
+/* Reviews Section */
+.reviews {
+    margin-top: 1500px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    margin-left: -2000px;
+}
+
+.reviews h3 {
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+
+.review-form {
+    margin-bottom: 20px;
+}
+
+.review-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.review-form select, .review-form textarea {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.review-form button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.reviews-list {
+    margin-top: 20px;
+}
+
+.review {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.review-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #555;
+}
+
+.review .username {
+    font-weight: bold;
+}
+
+.review .rating {
+    color: #007bff;
+}
+
+.review .date {
+    color: #777;
+}
+
+.review .comment {
+    font-size: 14px;
+    color: #333;
+}
