@@ -55,3 +55,25 @@ def create_tables():
     conn.commit()
     cur.close()
     conn.close()
+    
+    
+    def create_tables():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Create cart_items table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS cart_items (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (product_id) REFERENCES products (id)
+        );
+    ''')
+
+    conn.commit()
+    cur.close()
+    conn.close()
