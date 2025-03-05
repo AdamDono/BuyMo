@@ -1,6 +1,7 @@
 import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
 
+
 def get_db_connection():
     conn = psycopg2.connect(
         dbname="ecom_db",
