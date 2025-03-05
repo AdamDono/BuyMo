@@ -40,6 +40,12 @@
         <p class="category"><strong>Category:</strong> {{ product[5] }}</p>
         <button class="btn">Buy Now</button>
         <button class="btn wishlist">Add to Wishlist</button>
+        <!-- Add to Cart Form -->
+<form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}">
+    <label for="quantity">Quantity:</label>
+    <input type="number" id="quantity" name="quantity" value="1" min="1">
+    <button type="submit" class="btn">Add to Cart</button>
+</form>
     </div>
 </div>
 
