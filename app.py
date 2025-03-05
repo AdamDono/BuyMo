@@ -295,7 +295,72 @@ def create_user(username, email, password, is_admin=False):
     conn.close()
 
 
+# Route to add a product to the cart
+@app.route('/add-to-cart/<int:product_id>', methods=['POST'])
+@login_required
+def add_to_cart(product_id):
+    quantity = int(request.form.get('quantity', 1))  # Default quantity is 1
 
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        # Check if the product is already in the user's cart
+        cur.execute('''
+            SELECT id, quantity FROM cart_items 
+            WHERE user_id = %s AND product_id = %s;
+        ''', (current_user.id, product_id))
+        cart_item = cur.fetchone()
+
+        if cart_item:
+            # Update quantity if the product is already in the cart
+            new_quantity = cart_item[1] + quantity
+            cur.execute('''
+                UPDATE cart_items 
+                SET quantity = %s 
+                WHERE id = %s;
+            ''', (new_quantity, cart_item[0]))
+        else:
+            # Add new item to the cart
+            cur.execute('''
+                INSERT INTO cart_items (user_id, product_id, quantity)
+                VALUES (%s, %s, %s);
+            ''', (current_user.id, product_id, quantity))
+
+        conn.commit()
+        flash('Product added to cart!')
+    except Exception as e:
+        print(f"Error: {e}")
+        flash('An error occurred while adding the product to the cart.')
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('product', product_id=product_id))
+
+# Route to view the cart
+@app.route('/cart')
+@login_required
+def cart():
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+
+    # Fetch cart items for the current user
+    cur.execute('''
+        SELECT p.id, p.name, p.price, p.image, c.quantity 
+        FROM cart_items c
+        JOIN products p ON c.product_id = p.id
+        WHERE c.user_id = %s;
+    ''', (current_user.id,))
+    cart_items = cur.fetchall()
+
+    # Calculate total price
+    total_price = sum(item[2] * item[4] for item in cart_items)  # price * quantity
+
+    cur.close()
+    conn.close()
+
+    return render_template('cart.html', cart_items=cart_items, total_price=total_price)
 
 if __name__ == '__main__':
     app.run(debug=True)
