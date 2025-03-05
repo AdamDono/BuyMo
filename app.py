@@ -192,16 +192,52 @@ def load_user(user_id):
 def home():
     conn = database.get_db_connection()
     cur = conn.cursor()
-    cur.execute('''
+
+    # Get search query and filters from the request
+    search_query = request.args.get('query', '').strip()
+    category_filter = request.args.get('category', '').strip()
+    min_price = request.args.get('min_price', '').strip()
+    max_price = request.args.get('max_price', '').strip()
+
+    # Base query
+    query = '''
         SELECT p.id, p.name, p.price, p.description, p.image, c.name 
         FROM products p
-        JOIN categories c ON p.category_id = c.id;
-    ''')
+        JOIN categories c ON p.category_id = c.id
+        WHERE 1=1
+    '''
+    params = []
+
+    # Add search query filter
+    if search_query:
+        query += " AND p.name ILIKE %s"
+        params.append(f"%{search_query}%")
+
+    # Add category filter
+    if category_filter:
+        query += " AND c.name = %s"
+        params.append(category_filter)
+
+    # Add price range filter
+    if min_price:
+        query += " AND p.price >= %s"
+        params.append(float(min_price))
+    if max_price:
+        query += " AND p.price <= %s"
+        params.append(float(max_price))
+
+    # Execute the query
+    cur.execute(query, params)
     products = cur.fetchall()
+
+    # Fetch all categories for the filter dropdown
+    cur.execute('SELECT * FROM categories;')
+    categories = cur.fetchall()
+
     cur.close()
     conn.close()
-    return render_template('home.html', products=products, username=current_user.username)
 
+    return render_template('home.html', products=products, categories=categories, search_query=search_query, category_filter=category_filter, min_price=min_price, max_price=max_price)
 def create_user(username, email, password, is_admin=False):
     conn = get_db_connection()
     cur = conn.cursor()
