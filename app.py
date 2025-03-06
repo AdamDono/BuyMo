@@ -295,7 +295,6 @@ def create_user(username, email, password, is_admin=False):
     conn.close()
 
 
-# Route to add a product to the cart
 @app.route('/add-to-cart/<int:product_id>', methods=['POST'])
 @login_required
 def add_to_cart(product_id):
@@ -336,8 +335,8 @@ def add_to_cart(product_id):
         cur.close()
         conn.close()
 
-    return redirect(url_for('product', product_id=product_id))
-
+    # Redirect to the cart page
+    return redirect(url_for('cart'))
 # Route to view the cart
 @app.route('/cart')
 @login_required

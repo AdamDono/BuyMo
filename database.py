@@ -38,29 +38,6 @@ def create_tables():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Create reviews table
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS reviews (
-            id SERIAL PRIMARY KEY,
-            product_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
-            comment TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (product_id) REFERENCES products (id),
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        );
-    ''')
-
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    
-    def create_tables():
-    conn = get_db_connection()
-    cur = conn.cursor()
-
     # Create cart_items table
     cur.execute('''
         CREATE TABLE IF NOT EXISTS cart_items (
@@ -77,3 +54,6 @@ def create_tables():
     conn.commit()
     cur.close()
     conn.close()
+
+# Call the function to create tables
+create_tables()
