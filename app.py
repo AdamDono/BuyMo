@@ -361,5 +361,69 @@ def cart():
 
     return render_template('cart.html', cart_items=cart_items, total_price=total_price)
 
+
+# Route to remove an item from the cart
+@app.route('/remove-from-cart/<int:cart_item_id>', methods=['POST'])
+@login_required
+def remove_from_cart(cart_item_id):
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        # Delete the item from the cart
+        cur.execute('''
+            DELETE FROM cart_items 
+            WHERE id = %s AND user_id = %s;
+        ''', (cart_item_id, current_user.id))
+        conn.commit()
+        flash('Item removed from cart!')
+    except Exception as e:
+        print(f"Error: {e}")
+        flash('An error occurred while removing the item from the cart.')
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('cart'))
+
+# Route to update the quantity of an item in the cart
+@app.route('/update-cart-item/<int:cart_item_id>', methods=['POST'])
+@login_required
+def update_cart_item(cart_item_id):
+    new_quantity = int(request.form.get('quantity', 1))  # Default quantity is 1
+
+    if new_quantity < 1:
+        flash('Quantity must be at least 1.')
+        return redirect(url_for('cart'))
+
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        # Update the quantity of the item in the cart
+        cur.execute('''
+            UPDATE cart_items 
+            SET quantity = %s 
+            WHERE id = %s AND user_id = %s;
+        ''', (new_quantity, cart_item_id, current_user.id))
+        conn.commit()
+        flash('Cart updated successfully!')
+    except Exception as e:
+        print(f"Error: {e}")
+        flash('An error occurred while updating the cart.')
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('cart'))
+
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
