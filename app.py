@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
 
+
 # Create tables if they don't exist
 database.create_tables()
 
@@ -429,30 +430,26 @@ def delete_product(product_id):
         abort(403)
     
     conn = database.get_db_connection()
-    cur = conn.cursor()
     try:
-        # First delete references in cart_items
-        cur.execute('DELETE FROM cart_items WHERE product_id = %s', (product_id,))
-        # Then delete the product
-        cur.execute('DELETE FROM products WHERE id = %s', (product_id,))
+        cur = conn.cursor()
+        # First remove from carts
+        cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+        # Then delete product
+        cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
         conn.commit()
-        flash('Product deleted successfully!')
+        flash('Product deleted successfully')
     except Exception as e:
         conn.rollback()
-        flash('Error deleting product')
-        app.logger.error(f"Delete product error: {str(e)}")
+        flash(f'Error deleting product: {str(e)}', 'error')
     finally:
-        cur.close()
         conn.close()
     
+    
+    
     return redirect(url_for('home'))
-
-
-
-
-
-
-
-
 if __name__ == '__main__':
     app.run(debug=True)
+    
+    
+    app.config['CSP_DEFAULT_SRC'] = "'self'"
+app.config['CSP_SCRIPT_SRC'] = "'self' 'unsafe-inline'"
