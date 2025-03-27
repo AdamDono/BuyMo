@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
 
+
 # Create tables if they don't exist
 database.create_tables()
 
@@ -338,6 +339,11 @@ def add_to_cart(product_id):
     # Redirect to the cart page
     return redirect(url_for('cart'))
 # Route to view the cart
+
+
+
+
+
 @app.route('/cart')
 @login_required
 def cart():
@@ -361,5 +367,89 @@ def cart():
 
     return render_template('cart.html', cart_items=cart_items, total_price=total_price)
 
+# Add this with your other routes
+@app.route('/edit-product/<int:product_id>', methods=['GET', 'POST'])
+@login_required
+def edit_product(product_id):
+    if not current_user.is_admin:
+        abort(403)
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Get product details
+    cur.execute('SELECT * FROM products WHERE id = %s', (product_id,))
+    product = cur.fetchone()
+    
+    # Get categories for dropdown
+    cur.execute('SELECT * FROM categories')
+    categories = cur.fetchall()
+    
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            price = float(request.form['price'])
+            description = request.form['description']
+            category_id = int(request.form['category'])
+            
+            # Handle image upload if new file provided
+            image_url = product[4]  # Keep existing image by default
+            if 'image' in request.files and request.files['image'].filename:
+                image = request.files['image']
+                if allowed_file(image.filename):
+                    filename = secure_filename(image.filename)
+                    image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    image_url = f"uploads/{filename}"
+            
+            # Update product in database
+            cur.execute('''
+                UPDATE products 
+                SET name = %s, price = %s, description = %s, 
+                    image = %s, category_id = %s 
+                WHERE id = %s
+            ''', (name, price, description, image_url, category_id, product_id))
+            
+            conn.commit()
+            flash('Product updated successfully!')
+            return redirect(url_for('product', product_id=product_id))
+        except Exception as e:
+            conn.rollback()
+            flash('Error updating product')
+        finally:
+            cur.close()
+            conn.close()
+    
+    return render_template('edit_product.html', 
+                         product=product, 
+                         categories=categories)
+
+@app.route('/delete-product/<int:product_id>', methods=['POST'])
+@login_required
+def delete_product(product_id):
+    if not current_user.is_admin:
+        abort(403)
+    
+    conn = database.get_db_connection()
+    try:
+        cur = conn.cursor()
+        # First remove from carts
+        cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+        # Then delete product
+        cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
+        conn.commit()
+        flash('Product deleted successfully')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error deleting product: {str(e)}', 'error')
+    finally:
+        conn.close()
+    
+    
+    
+    return redirect(url_for('home'))
 if __name__ == '__main__':
     app.run(debug=True)
+    
+    
+    app.config['CSP_DEFAULT_SRC'] = "'self'"
+app.config['CSP_SCRIPT_SRC'] = "'self' 'unsafe-inline'"
