@@ -32,6 +32,58 @@ def index():
 def product(product_id):
     conn = database.get_db_connection()
     cur = conn.cursor()
+    
+    # Get the product
+    cur.execute('''
+        SELECT p.id, p.name, p.price, p.description, p.image, c.id, c.name 
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        WHERE p.id = %s;
+    ''', (product_id,))
+    product = cur.fetchone()
+    
+    # Get reviews
+    cur.execute('''
+        SELECT r.rating, r.comment, u.username, r.created_at 
+        FROM reviews r
+        JOIN users u ON r.user_id = u.id
+        WHERE r.product_id = %s
+        ORDER BY r.created_at DESC;
+    ''', (product_id,))
+    reviews = cur.fetchall()
+    
+    # Calculate average rating
+    avg_rating = 0
+    if reviews:
+        avg_rating = sum(review[0] for review in reviews) / len(reviews)
+    
+    # Get related products
+    if product:
+        cur.execute('''
+            SELECT p.id, p.name, p.price, p.description, p.image 
+            FROM products p
+            WHERE p.category_id = %s AND p.id != %s
+            LIMIT 4;
+        ''', (product[5], product_id))
+        related_products = cur.fetchall()
+    else:
+        related_products = []
+    
+    cur.close()
+    conn.close()
+    
+    if product:
+        return render_template('product.html', 
+                            product=product,
+                            reviews=reviews,
+                            avg_rating=avg_rating,
+                            related_products=related_products)
+    else:
+        flash('Product not found.')
+        return redirect(url_for('home'))
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
 
     # Fetch the current product
     cur.execute('''
@@ -443,6 +495,12 @@ def delete_product(product_id):
         flash(f'Error deleting product: {str(e)}', 'error')
     finally:
         conn.close()
+    
+    
+    
+    
+    
+    
     
     
     
