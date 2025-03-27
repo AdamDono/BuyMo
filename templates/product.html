@@ -28,6 +28,19 @@
             {% endif %}
         </nav>
     </header>
+
+    <!-- Admin Controls (only show if admin) -->
+{% if current_user.is_authenticated and current_user.is_admin %}
+<div class="admin-controls">
+    <a href="{{ url_for('edit_product', product_id=product[0]) }}" class="btn-edit">
+        Edit
+    </a>
+    <form action="{{ url_for('delete_product', product_id=product[0]) }}" method="POST" 
+          onsubmit="return confirm('Delete this product?')" class="d-inline">
+        <button type="submit" class="btn-delete">Delete</button>
+    </form>
+</div>
+{% endif %}
 <!-- Main Product Details -->
 <div class="product-details">
     <div class="product-image">
@@ -48,6 +61,9 @@
 </form>
     </div>
 </div>
+
+
+
 
 <!-- Reviews Section -->
 <div class="reviews">
