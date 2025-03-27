@@ -207,33 +207,84 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Quantity controls functionality
-        document.querySelectorAll('.quantity-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const quantityElement = this.parentElement.querySelector('.quantity');
-                let quantity = parseInt(quantityElement.textContent);
-                
-                if (this.textContent === '+' && quantity < 10) {
-                    quantity++;
-                } else if (this.textContent === '-' && quantity > 1) {
-                    quantity--;
-                }
-                
-                quantityElement.textContent = quantity;
-                // Here you would typically update via AJAX
-            });
-        });
+<script>
+// Quantity controls with AJAX
+document.querySelectorAll('.quantity-btn').forEach(button => {
+    button.addEventListener('click', async function() {
+        const itemElement = this.closest('.cart-item');
+        const productId = itemElement.dataset.productId;
+        const quantityElement = this.parentElement.querySelector('.quantity');
+        let quantity = parseInt(quantityElement.textContent);
         
-        // Remove item functionality
-        document.querySelectorAll('.remove-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                if (confirm('Remove this item from your cart?')) {
-                    // Here you would typically remove via AJAX
-                    this.closest('.cart-item').remove();
-                }
-            });
+        if (this.textContent === '+' && quantity < 10) {
+            quantity++;
+        } else if (this.textContent === '-' && quantity > 1) {
+            quantity--;
+        } else if (this.textContent === '-' && quantity === 1) {
+            // If decreasing to 0, treat as remove
+            if (confirm('Remove this item from your cart?')) {
+                await updateCart(productId, 0);
+                itemElement.remove();
+                updateCartSummary();
+            }
+            return;
+        }
+        
+        quantityElement.textContent = quantity;
+        await updateCart(productId, quantity);
+        updateCartSummary();
+    });
+});
+
+// Remove item with AJAX
+document.querySelectorAll('.remove-btn').forEach(button => {
+    button.addEventListener('click', async function() {
+        const itemElement = this.closest('.cart-item');
+        const productId = itemElement.dataset.productId;
+        
+        if (confirm('Remove this item from your cart?')) {
+            const success = await removeFromCart(productId);
+            if (success) {
+                itemElement.remove();
+                updateCartSummary();
+            }
+        }
+    });
+});
+
+// AJAX helper functions
+async function updateCart(productId, quantity) {
+    try {
+        const response = await fetch(`/update-cart/${productId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `quantity=${quantity}`
         });
-    </script>
+        return await response.json();
+    } catch (error) {
+        console.error('Error updating cart:', error);
+        return {success: false};
+    }
+}
+
+async function removeFromCart(productId) {
+    try {
+        const response = await fetch(`/remove-from-cart/${productId}`, {
+            method: 'POST'
+        });
+        return (await response.json()).success;
+    } catch (error) {
+        console.error('Error removing from cart:', error);
+        return false;
+    }
+}
+
+function updateCartSummary() {
+    // Implement logic to update cart totals via AJAX if needed
+    // Or reload the page: window.location.reload();
+}
+</script>
 </body>
 </html>

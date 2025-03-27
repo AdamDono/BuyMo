@@ -3,149 +3,358 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ product[1] }} - My E-Commercehuu Store</title>
+    <title>{{ product[1] }} - My E-Commerce Store</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-       
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- Slick Carousel CSS -->
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.css"/>
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick-theme.css"/>
+    <style>
+        .product-container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 20px;
+            margin-top:1000px
+        }
+        .product-main {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 50px;
+        }
+        .product-image {
+            flex: 1;
+            max-width: 500px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .product-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .product-info {
+            flex: 1;
+        }
+        .product-title {
+            font-size: 28px;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        .product-price {
+            font-size: 24px;
+            color: #e74c3c;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .product-meta {
+            margin-bottom: 25px;
+        }
+        .product-meta p {
+            margin-bottom: 8px;
+            color: #7f8c8d;
+        }
+        .product-rating {
+            margin-bottom: 15px;
+        }
+        .product-rating .fas {
+            color: #f39c12;
+        }
+        .product-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        .btn-secondary {
+            background: #2ecc71;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-secondary:hover {
+            background: #27ae60;
+        }
+        .quantity-input {
+            width: 70px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .section-title {
+            font-size: 22px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f1f1f1;
+        }
+        .reviews-container {
+            margin-top: 50px;
+        }
+        .review-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .review-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .review-rating {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        .review-date {
+            color: #95a5a6;
+            font-size: 14px;
+        }
+        .review-comment {
+            color: #34495e;
+            line-height: 1.6;
+        }
+        .related-products {
+            margin-top: 50px;
+        }
+        .related-product-card {
+            padding: 15px;
+            text-align: center;
+        }
+        .related-product-card img {
+            max-width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .related-product-title {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        .related-product-price {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        @media (max-width: 768px) {
+            .product-main {
+                flex-direction: column;
+            }
+            .product-image {
+                max-width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <h1>My E-Commerceh Store</h1>
-        <nav>
-            <a href="{{ url_for('home') }}">Home</a>
-            {% if current_user.is_authenticated and current_user.is_admin %}
-                <a href="{{ url_for('add_product') }}">Add Product</a>
-            {% endif %}
-            {% if current_user.is_authenticated %}
-                <span>Welcome, {{ current_user.username }}!</span>
-                <a href="{{ url_for('logout') }}">Logout</a>
-            {% else %}
-                <a href="{{ url_for('signup') }}">Sign Up</a>
-                <a href="{{ url_for('login') }}">Login</a>
-            {% endif %}
-        </nav>
+    <header class="bg-dark text-white p-3">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h4 mb-0">
+                    <a href="{{ url_for('home') }}" class="text-white text-decoration-none">
+                        <i class="fas fa-store"></i> My E-Commerce Store
+                    </a>
+                </h1>
+                <nav>
+                    <a href="{{ url_for('home') }}" class="text-white mx-2">
+                        <i class="fas fa-home"></i> Home
+                    </a>
+                    <a href="{{ url_for('cart') }}" class="text-white mx-2">
+                        <i class="fas fa-shopping-cart"></i> Cart
+                    </a>
+                    {% if current_user.is_authenticated and current_user.is_admin %}
+                        <a href="{{ url_for('add_product') }}" class="text-white mx-2">
+                            <i class="fas fa-plus-circle"></i> Add Product
+                        </a>
+                    {% endif %}
+                    {% if current_user.is_authenticated %}
+                        <span class="text-light mx-2">
+                            <i class="fas fa-user"></i> {{ current_user.username }}
+                        </span>
+                        <a href="{{ url_for('logout') }}" class="text-white mx-2">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    {% else %}
+                        <a href="{{ url_for('signup') }}" class="text-white mx-2">
+                            <i class="fas fa-user-plus"></i> Sign Up
+                        </a>
+                        <a href="{{ url_for('login') }}" class="text-white mx-2">
+                            <i class="fas fa-sign-in-alt"></i> Login
+                        </a>
+                    {% endif %}
+                </nav>
+            </div>
+        </div>
     </header>
 
-<!-- Main Product Details -->
-<div class="product-details">
-    <div class="product-image">
-        <img src="{{ url_for('static', filename=product[4]) }}" alt="{{ product[1] }}">
-    </div>
-    <div class="product-info">
-        <h2>{{ product[1] }}</h2>
-        <p class="price">${{ product[2] }}</p>
-        <p class="description">{{ product[3] }}</p>
-        <p class="category"><strong>Category:</strong> {{ product[5] }}</p>
-        <button class="btn">Buy Now</button>
-        <button class="btn wishlist">Add to Wishlist</button>
-        <!-- Add to Cart Form -->
-<form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}">
-    <label for="quantity">Quantity:</label>
-    <input type="number" id="quantity" name="quantity" value="1" min="1">
-    <button type="submit" class="btn">Add to Cart</button>
-</form>
-    </div>
-</div>
-
-
-
-
-<!-- Reviews Section -->
-<div class="reviews">
-    <h3>Customer Reviews</h3>
-
-    <!-- Review Form -->
-    {% if current_user.is_authenticated %}
-    <form method="POST" action="{{ url_for('submit_review', product_id=product[0]) }}" class="review-form">
-        <label for="rating">Rating:</label>
-        <select id="rating" name="rating" required>
-            <option value="1">1 Star</option>
-            <option value="2">2 Stars</option>
-            <option value="3">3 Stars</option>
-            <option value="4">4 Stars</option>
-            <option value="5">5 Stars</option>
-        </select>
-
-        <label for="comment">Comment:</label>
-        <textarea id="comment" name="comment" rows="4" required></textarea>
-
-        <button type="submit" class="btn">Submit Review</button>
-    </form>
-    {% else %}
-    <p>Please <a href="{{ url_for('login') }}">log in</a> to leave a review.</p>
-    {% endif %}
-
-    <!-- Display Reviews -->
-    <div class="reviews-list">
-        {% for review in reviews %}
-        <div class="review">
-            <div class="review-header">
-                <span class="username">{{ review[2] }}</span>
-                <span class="rating">Rating: {{ review[0] }} Stars</span>
-                <span class="date">{{ review[3].strftime('%Y-%m-%d %H:%M') }}</span>
+    <main class="container my-5">
+        <div class="product-container">
+            <!-- Main Product Details -->
+            <div class="product-main">
+                <div class="product-image">
+                    <img src="{{ url_for('static', filename=product[4]) }}" 
+                         alt="{{ product[1] }}"
+                         onerror="this.src='{{ url_for('static', filename='images/placeholder.jpg') }}'">
+                </div>
+                <div class="product-info">
+                    <h1 class="product-title">{{ product[1] }}</h1>
+                    <div class="product-price">${{ "%.2f"|format(product[2]) }}</div>
+                    
+                    <div class="product-meta">
+                        <p><strong>Category:</strong> {{ product[6] }}</p>
+                        <div class="product-rating">
+                            {% for i in range(1, 6) %}
+                                <i class="fas fa-star{% if i > avg_rating %}-o{% endif %}"></i>
+                            {% endfor %}
+                            <span>({{ reviews|length }} reviews)</span>
+                        </div>
+                    </div>
+                    
+                    <p class="description">{{ product[3] }}</p>
+                    
+                    <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="product-actions">
+                        <input type="number" id="quantity" name="quantity" 
+                               class="quantity-input" value="1" min="1" max="10">
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-cart-plus"></i> Add to Cart
+                        </button>
+                        <button type="button" class="btn-secondary">
+                            <i class="fas fa-heart"></i> Wishlist
+                        </button>
+                    </form>
+                </div>
             </div>
-            <p class="comment">{{ review[1] }}</p>
+
+            <!-- Reviews Section -->
+            <div class="reviews-container">
+                <h2 class="section-title"><i class="fas fa-star"></i> Customer Reviews</h2>
+                
+                {% if current_user.is_authenticated %}
+                <div class="review-form-container mb-5">
+                    <h3>Write a Review</h3>
+                    <form method="POST" action="{{ url_for('submit_review', product_id=product[0]) }}" class="review-form">
+                        <div class="mb-3">
+                            <label for="rating" class="form-label">Rating</label>
+                            <select id="rating" name="rating" class="form-select" required>
+                                <option value="">Select rating</option>
+                                {% for i in range(1,6) %}
+                                    <option value="{{ i }}">{{ i }} Star{% if i > 1 %}s{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="comment" class="form-label">Your Review</label>
+                            <textarea id="comment" name="comment" class="form-control" rows="4" required></textarea>
+                        </div>
+                        <button type="submit" class="btn-primary">Submit Review</button>
+                    </form>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    Please <a href="{{ url_for('login') }}" class="alert-link">log in</a> to leave a review.
+                </div>
+                {% endif %}
+                
+                <div class="reviews-list">
+                    {% for review in reviews %}
+                    <div class="review-card">
+                        <div class="review-header">
+                            <div>
+                                <strong>{{ review[2] }}</strong>
+                                <span class="review-rating">
+                                    {% for i in range(1, 6) %}
+                                        <i class="fas fa-star{% if i > review[0] %}-o{% endif %}"></i>
+                                    {% endfor %}
+                                </span>
+                            </div>
+                            <span class="review-date">{{ review[3].strftime('%B %d, %Y') }}</span>
+                        </div>
+                        <p class="review-comment">{{ review[1] }}</p>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        No reviews yet. Be the first to review this product!
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Related Products Section -->
+            <div class="related-products">
+                <h2 class="section-title">Related Products</h2>
+                <div class="related-products-grid">
+                    {% for related_product in related_products %}
+                    <div class="related-product-card">
+                        <a href="{{ url_for('product', product_id=related_product[0]) }}" class="text-decoration-none">
+                            <img src="{{ url_for('static', filename=related_product[4]) }}" 
+                                 alt="{{ related_product[1] }}"
+                                 onerror="this.src='{{ url_for('static', filename='images/placeholder.jpg') }}'">
+                            <h4 class="related-product-title">{{ related_product[1] }}</h4>
+                            <p class="related-product-price">${{ "%.2f"|format(related_product[2]) }}</p>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
-        {% else %}
-        <p>No reviews yet. Be the first to review this product!</p>
-        {% endfor %}
-    </div>
-</div>
-<!-- Related Products Section -->
-<div class="related-products">
-    <h3>Related Products</h3>
-    <div class="related-products-grid">
-        {% for related_product in related_products %}
-        <div class="related-product-card">
-            <a href="{{ url_for('product', product_id=related_product[0]) }}">
-                <img src="{{ url_for('static', filename=related_product[4]) }}" alt="{{ related_product[1] }}">
-                <h4>{{ related_product[1] }}</h4>
-                <p class="price">${{ related_product[2] }}</p>
-            </a>
-        </div>
-        {% endfor %}
-    </div>
-</div>
+    </main>
 
-
-<!-- jQuery (required for Slick Carousel) -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-<!-- Slick Carousel JS -->
-<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.min.js"></script>
-
-<!-- Initialize Slick Carousel -->
-<script>
-    $(document).ready(function(){
-        $('.related-products-grid').slick({
-            dots: true, // Show dots for navigation
-            infinite: true, // Infinite looping
-            speed: 300, // Transition speed
-            slidesToShow: 3, // Number of slides to show at once
-            slidesToScroll: 1, // Number of slides to scroll
-            responsive: [
-                {
-                    breakpoint: 768, // Adjust for tablets
-                    settings: {
-                        slidesToShow: 2,
-                        slidesToScroll: 1
+    <!-- jQuery (required for Slick Carousel) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Slick Carousel JS -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.min.js"></script>
+    <!-- Initialize Slick Carousel -->
+    <script>
+        $(document).ready(function(){
+            $('.related-products-grid').slick({
+                dots: true,
+                infinite: true,
+                speed: 300,
+                slidesToShow: 4,
+                slidesToScroll: 1,
+                responsive: [
+                    {
+                        breakpoint: 992,
+                        settings: {
+                            slidesToShow: 3,
+                            slidesToScroll: 1
+                        }
+                    },
+                    {
+                        breakpoint: 768,
+                        settings: {
+                            slidesToShow: 2,
+                            slidesToScroll: 1
+                        }
+                    },
+                    {
+                        breakpoint: 576,
+                        settings: {
+                            slidesToShow: 1,
+                            slidesToScroll: 1
+                        }
                     }
-                },
-                {
-                    breakpoint: 480, // Adjust for mobile
-                    settings: {
-                        slidesToShow: 1,
-                        slidesToScroll: 1
-                    }
-                }
-            ]
+                ]
+            });
         });
-    });
-</script>
-
-
+    </script>
 </body>
 </html>
