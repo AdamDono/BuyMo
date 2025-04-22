@@ -16,7 +16,11 @@ def get_db_connection():
 def create_user(username, email, password):
     conn = get_db_connection()
     cur = conn.cursor()
-    password_hash = generate_password_hash(password)
+    password_hash = generate_password_hash(
+        password,
+        method='pbkdf2:sha256',  # Explicitly set method
+        salt_length=16
+    )
     cur.execute(
         'INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s);',
         (username, email, password_hash)
