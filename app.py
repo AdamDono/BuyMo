@@ -6,6 +6,8 @@ from werkzeug.utils import secure_filename
 import os
 
 
+
+
 # Create tables if they don't exist
 database.create_tables()
 
@@ -13,6 +15,11 @@ database.create_tables()
 database.create_tables()
 app = Flask(__name__)
 app.secret_key = 'Fliph106'  # Required for session management
+
+@app.template_filter('zar')
+def format_zar(amount):
+    return f"R{amount:,.2f}".replace(",", " ")
+
 
 # Configure upload folder and allowed extensions
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
