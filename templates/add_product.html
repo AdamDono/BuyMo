@@ -136,6 +136,15 @@
                     </select>
                 </div>
 
+
+                <div class="form-group">
+                    <label for="quantity">Initial Stock:</label>
+                    <input type="number" id="quantity" name="quantity" 
+                           min="1" value="10" required 
+                           {% if not current_user.is_admin %}disabled{% endif %}>
+                </div>
+
+                
                 <div class="form-group">
                     <label for="image" class="form-label required-field">Product Image</label>
                     <input type="file" id="image" name="image" class="form-control" 
@@ -144,10 +153,7 @@
                         <span>Image Preview</span>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label for="quantity">Initial Stock Quantity:</label>
-                    <input type="number" id="quantity" name="quantity" min="1" value="100" required>
-                </div>
+           
 
                 <div class="form-group mt-4">
                     <button type="submit" class="btn-submit">
