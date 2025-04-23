@@ -326,22 +326,25 @@ def add_to_cart(product_id):
 def cart():
     conn = database.get_db_connection()
     cur = conn.cursor()
-
+    
+    # Make sure this query matches your database structure
     cur.execute('''
-        SELECT p.id, p.name, p.price, p.image, c.quantity 
-        FROM cart_items c
-        JOIN products p ON c.product_id = p.id
-        WHERE c.user_id = %s;
+        SELECT ci.id, p.name, p.price, p.image, ci.quantity 
+        FROM cart_items ci
+        JOIN products p ON ci.product_id = p.id
+        WHERE ci.user_id = %s
     ''', (current_user.id,))
     cart_items = cur.fetchall()
 
-    total_price = sum(item[2] * item[4] for item in cart_items)
-
+    # Calculate total
+    total_price = sum(item[2] * item[4] for item in cart_items)  # price * quantity
+    
     cur.close()
     conn.close()
-
-    return render_template('cart.html', cart_items=cart_items, total_price=total_price)
-
+    
+    return render_template('cart.html', 
+                         cart_items=cart_items, 
+                         total_price=total_price)
 @app.route('/checkout', methods=['POST'])
 @login_required
 def checkout():
@@ -385,6 +388,7 @@ def checkout():
     return redirect(url_for('home'))
 
 
+# Cart Item Removal
 @app.route('/remove-from-cart/<int:item_id>', methods=['POST'])
 @login_required
 def remove_from_cart(item_id):
@@ -392,18 +396,16 @@ def remove_from_cart(item_id):
     try:
         cur = conn.cursor()
         
-        # Verify the item belongs to current user before deleting
+        # Verify ownership before deletion
         cur.execute('''
             DELETE FROM cart_items 
             WHERE id = %s AND user_id = %s
-            RETURNING product_id
+            RETURNING id
         ''', (item_id, current_user.id))
         
-        deleted_item = cur.fetchone()
-        
-        if deleted_item:
+        if cur.fetchone():
             conn.commit()
-            flash('Item removed from cart')
+            flash('Item removed from cart', 'success')
         else:
             flash('Item not found in your cart', 'error')
             
@@ -415,7 +417,42 @@ def remove_from_cart(item_id):
     
     return redirect(url_for('cart'))
 
-
+# Cart Quantity Update
+@app.route('/update-cart/<int:item_id>', methods=['POST'])
+@login_required
+def update_cart(item_id):
+    try:
+        quantity = int(request.form['quantity'])
+        if quantity < 1:
+            return redirect(url_for('remove_from_cart', item_id=item_id))
+            
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        # Verify item belongs to user before updating
+        cur.execute('''
+            UPDATE cart_items
+            SET quantity = %s
+            WHERE id = %s AND user_id = %s
+            RETURNING quantity
+        ''', (quantity, item_id, current_user.id))
+        
+        if cur.fetchone():
+            conn.commit()
+            flash('Cart updated successfully', 'success')
+        else:
+            flash('Item not found in your cart', 'error')
+            
+    except ValueError:
+        flash('Please enter a valid quantity', 'error')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error updating cart: {str(e)}', 'error')
+    finally:
+        if conn:
+            conn.close()
+    
+    return redirect(url_for('cart'))
 
 @app.route('/edit-product/<int:product_id>', methods=['GET', 'POST'])
 @login_required
