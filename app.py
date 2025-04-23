@@ -384,6 +384,39 @@ def checkout():
     
     return redirect(url_for('home'))
 
+
+@app.route('/remove-from-cart/<int:item_id>', methods=['POST'])
+@login_required
+def remove_from_cart(item_id):
+    conn = database.get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Verify the item belongs to current user before deleting
+        cur.execute('''
+            DELETE FROM cart_items 
+            WHERE id = %s AND user_id = %s
+            RETURNING product_id
+        ''', (item_id, current_user.id))
+        
+        deleted_item = cur.fetchone()
+        
+        if deleted_item:
+            conn.commit()
+            flash('Item removed from cart')
+        else:
+            flash('Item not found in your cart', 'error')
+            
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error removing item: {str(e)}', 'error')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('cart'))
+
+
+
 @app.route('/edit-product/<int:product_id>', methods=['GET', 'POST'])
 @login_required
 def edit_product(product_id):
@@ -446,6 +479,9 @@ def edit_product(product_id):
     
     finally:
         conn.close()
+        
+        
+        
 @app.route('/delete-product/<int:product_id>', methods=['POST'])
 @login_required
 def delete_product(product_id):
