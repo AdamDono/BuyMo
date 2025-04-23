@@ -395,24 +395,39 @@ def edit_product(product_id):
         cur = conn.cursor()
         cur.execute('SELECT * FROM products WHERE id = %s', (product_id,))
         product = cur.fetchone()
+        
+        if not product:
+            flash('Product not found')
+            return redirect(url_for('home'))
+            
         cur.execute('SELECT * FROM categories')
         categories = cur.fetchall()
         
         if request.method == 'POST':
-            new_quantity = int(request.form.get('quantity', product[6]))
+            # Get existing image path FIRST
+            image_url = product[4]  # Assuming image path is at index 4
             
+            # Handle new image upload if provided
+            if 'image' in request.files:
+                image = request.files['image']
+                if image.filename != '' and allowed_file(image.filename):
+                    filename = secure_filename(image.filename)
+                    image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    image.save(image_path)
+                    image_url = f"uploads/{filename}"  # Update only if new image is valid
+            
+            # Update product
             cur.execute('''
                 UPDATE products 
                 SET name = %s, price = %s, description = %s,
-                    image = %s, category_id = %s, remaining_quantity = %s
+                    image = %s, category_id = %s
                 WHERE id = %s
             ''', (
                 request.form['name'],
                 float(request.form['price']),
                 request.form['description'],
-                image_url,
+                image_url,  # Now always defined
                 int(request.form['category']),
-                new_quantity,
                 product_id
             ))
             
@@ -423,9 +438,14 @@ def edit_product(product_id):
         return render_template('edit_product.html', 
                            product=product, 
                            categories=categories)
+    
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error updating product: {str(e)}', 'error')
+        return redirect(url_for('edit_product', product_id=product_id))
+    
     finally:
         conn.close()
-
 @app.route('/delete-product/<int:product_id>', methods=['POST'])
 @login_required
 def delete_product(product_id):
