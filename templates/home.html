@@ -80,7 +80,7 @@
                 <img src="{{ url_for('static', filename=product[4]) }}" alt="{{ product[1] }}">
                 <div class="product-info">
                     <h3>{{ product[1] }}</h3>
-                    <p class="price">${{ "%.2f"|format(product[2]) }}</p>
+                    <p class="price">R{{ "%.2f"|format(product[2]) }}</p>
                     
                     <!-- View Product Button (visible to all) -->
                     <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
