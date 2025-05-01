@@ -540,5 +540,74 @@ def delete_product(product_id):
     
     return redirect(url_for('home'))
 
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    user = get_user_details(current_user.id)
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        profile_image = None
+        
+        # Handle file upload
+        if 'profile_image' in request.files:
+            file = request.files['profile_image']
+            if file.filename != '' and allowed_file(file.filename):
+                filename = secure_filename(f"user_{current_user.id}_{file.filename}")
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'profiles', filename)
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                file.save(filepath)
+                profile_image = f"uploads/profiles/{filename}"
+                
+                # Delete old image if exists
+                if user[4]:  # profile_image field
+                    old_path = os.path.join(app.static_folder, user[4])
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+        
+        if update_user_profile(current_user.id, username, email, profile_image):
+            flash('Profile updated successfully!', 'success')
+            return redirect(url_for('profile'))
+        else:
+            flash('Error updating profile', 'danger')
+    
+    return render_template('profile.html', user=user)
+
+@app.route('/profile/change-password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # Verify current password
+    user = get_user_by_id(current_user.id)
+    if not check_password_hash(user['password_hash'], current_password):
+        flash('Current password is incorrect', 'danger')
+        return redirect(url_for('profile'))
+    
+    # Validate new password
+    if new_password != confirm_password:
+        flash('New passwords do not match', 'danger')
+        return redirect(url_for('profile'))
+    
+    if len(new_password) < 8:
+        flash('Password must be at least 8 characters', 'danger')
+        return redirect(url_for('profile'))
+    
+    # Update password
+    new_hash = generate_password_hash(new_password)
+    if update_user_password(current_user.id, new_hash):
+        flash('Password updated successfully!', 'success')
+        # Logout after password change for security
+        logout_user()
+        return redirect(url_for('login'))
+    else:
+        flash('Error updating password', 'danger')
+        return redirect(url_for('profile'))
+
 if __name__ == '__main__':
     app.run(debug=True)
