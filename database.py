@@ -13,6 +13,62 @@ def get_db_connection():
     return conn
 
 
+# Add these functions to your existing database.py
+def get_user_details(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT id, username, email, created_at, profile_image 
+        FROM users WHERE id = %s
+    ''', (user_id,))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    return user
+
+def update_user_profile(user_id, username, email, profile_image=None):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if profile_image:
+            cur.execute('''
+                UPDATE users 
+                SET username = %s, email = %s, profile_image = %s
+                WHERE id = %s
+            ''', (username, email, profile_image, user_id))
+        else:
+            cur.execute('''
+                UPDATE users 
+                SET username = %s, email = %s
+                WHERE id = %s
+            ''', (username, email, user_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error updating profile: {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+def update_user_password(user_id, new_password_hash):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute('''
+            UPDATE users 
+            SET password_hash = %s
+            WHERE id = %s
+        ''', (new_password_hash, user_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error updating password: {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
 def create_user(username, email, password):
     conn = get_db_connection()
     cur = conn.cursor()
