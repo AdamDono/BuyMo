@@ -1,92 +1,82 @@
 {% extends "base.html" %}
 
+<header>
+    <h1>BuyMo</h1>
+    <nav>
+        <a href="{{ url_for('home') }}">Home</a>
+        {% if current_user.is_authenticated and current_user.is_admin %}
+            <a href="{{ url_for('add_product') }}">Add Product</a>
+        
+        {% endif %}
+        {% if current_user.is_authenticated %}
+            <span>Welcome, {{ current_user.username }}!</span>
+            <a href="{{ url_for('profile') }}"><i class="fas fa-user"></i> Profile</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a href="{{ url_for('signup') }}">Sign Up</a>
+            <a href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </nav>
+</header>
+
+
+
+
+
 {% block content %}
 <div class="profile-container">
-    <div class="profile-header">
-        <h2><i class="fas fa-user-circle"></i> Your Profile</h2>
-    </div>
+    <h2>Your Profile</h2>
     
-    <div class="profile-content">
-        <!-- Profile Image Section -->
-        <div class="profile-image-section">
-            <div class="image-preview">
-                <img src="{{ url_for('static', filename=user[4] if user[4] else 'images/default-profile.png') }}" 
-                     id="profile-preview"
-                     alt="Profile Image">
-            </div>
-            <form method="POST" enctype="multipart/form-data">
-                <div class="form-group">
-                    <label for="profile_image" class="file-upload-btn">
-                        <i class="fas fa-camera"></i> Change Photo
-                    </label>
-                    <input type="file" id="profile_image" name="profile_image" 
-                           accept="image/*" style="display: none;">
-                </div>
+    <form method="POST" enctype="multipart/form-data" class="profile-form">
+        <div class="profile-picture">
+            <img src="{{ url_for('static', filename=user[4] if user[4] else 'images/default-profile.png') }}" 
+                 id="profile-preview">
+            <label for="profile-upload" class="upload-btn">
+                <i class="fas fa-camera"></i> Change Photo
+                <input type="file" id="profile-upload" name="profile_image" accept="image/*">
+            </label>
         </div>
         
-        <!-- Profile Form Section -->
-        <div class="profile-form-section">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" 
-                       value="{{ user[1] }}" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" name="email" 
-                       value="{{ user[2] }}" required>
-            </div>
-            
-            <div class="form-group">
-                <label>Member Since</label>
-                <p class="form-readonly">{{ user[3].strftime('%B %d, %Y') }}</p>
-            </div>
-            
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save"></i> Update Profile
-            </button>
-            </form>
-            
-            <!-- Password Change Form -->
-            <div class="password-change-form">
-                <h3><i class="fas fa-lock"></i> Change Password</h3>
-                <form method="POST" action="{{ url_for('change_password') }}">
-                    <div class="form-group">
-                        <label for="current_password">Current Password</label>
-                        <input type="password" id="current_password" 
-                               name="current_password" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="new_password">New Password</label>
-                        <input type="password" id="new_password" 
-                               name="new_password" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="confirm_password">Confirm Password</label>
-                        <input type="password" id="confirm_password" 
-                               name="confirm_password" required>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-secondary">
-                        <i class="fas fa-key"></i> Change Password
-                    </button>
-                </form>
-            </div>
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" value="{{ user[1] }}" required>
         </div>
+        
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="{{ user[2] }}" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Member Since</label>
+            <p>{{ user[3].strftime('%B %d, %Y') }}</p>
+        </div>
+        
+        <button type="submit" class="btn-save">Save Changes</button>
+    </form>
+    
+    <div class="password-change">
+        <h3>Change Password</h3>
+        <form method="POST" action="{{ url_for('change_password') }}">
+            <div class="form-group">
+                <label for="current_password">Current Password</label>
+                <input type="password" id="current_password" name="current_password" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="new_password">New Password</label>
+                <input type="password" id="new_password" name="new_password" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+            
+            <button type="submit" class="btn-change">Change Password</button>
+        </form>
     </div>
 </div>
 
-<script>
-// Image preview functionality
-document.getElementById('profile_image').addEventListener('change', function(e) {
-    const preview = document.getElementById('profile-preview');
-    const file = e.target.files[0];
-    if (file) {
-        preview.src = URL.createObjectURL(file);
-    }
-});
-</script>
+<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
 {% endblock %}

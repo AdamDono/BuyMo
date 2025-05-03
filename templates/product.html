@@ -184,11 +184,13 @@
                         <a href="{{ url_for('add_product') }}" class="text-white mx-2">
                             <i class="fas fa-plus-circle"></i> Add Product
                         </a>
+                      
                     {% endif %}
                     {% if current_user.is_authenticated %}
-                        <span class="text-light mx-2">
-                            <i class="fas fa-user"></i> {{ current_user.username }}
-                        </span>
+                    
+                    <a href="{{ url_for('profile') }}">  <span class="text-light mx-2">
+                        <i class="fas fa-user"></i> {{ current_user.username }}
+                    </span></a>
                         <a href="{{ url_for('logout') }}" class="text-white mx-2">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
