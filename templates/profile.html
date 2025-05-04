@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+
+
+
+
+
+
+{% block content %}
+
+<div class="profile-container">
+    <h2>Your Profile</h2>
+    
+    <form method="POST" enctype="multipart/form-data" class="profile-form">
+        <div class="profile-picture">
+            <img src="{{ url_for('static', filename=user[4] if user[4] else 'images/default-profile.png') }}" 
+                 id="profile-preview">
+            <label for="profile-upload" class="upload-btn">
+                <i class="fas fa-camera"></i> Change Photo
+                <input type="file" id="profile-upload" name="profile_image" accept="image/*">
+            </label>
+        </div>
+        
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" value="{{ user[1] }}" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="{{ user[2] }}" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Member Since</label>
+            <p>{{ user[3].strftime('%B %d, %Y') }}</p>
+        </div>
+        
+        <button type="submit" class="btn-save">Save Changes</button>
+    </form>
+    
+    <div class="password-change">
+        <h3>Change Password</h3>
+        <form method="POST" action="{{ url_for('change_password') }}">
+            <div class="form-group">
+                <label for="current_password">Current Password</label>
+                <input type="password" id="current_password" name="current_password" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="new_password">New Password</label>
+                <input type="password" id="new_password" name="new_password" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+            
+            <button type="submit" class="btn-change">Change Password</button>
+        </form>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+{% endblock %}

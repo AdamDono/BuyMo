@@ -4,6 +4,14 @@ import database
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
+# app.py
+from database import (
+    get_db_connection,
+    get_user_details,  # Add this
+    get_user_by_id,    # Add this
+    update_user_profile,
+    update_user_password
+)
 
 # Create tables if they don't exist
 database.create_tables()
@@ -11,13 +19,17 @@ database.create_tables()
 app = Flask(__name__)
 app.secret_key = 'Fliph106'  # Required for session management
 
+
+
 @app.template_filter('zar')
 def format_zar(amount):
     return f"R{amount:,.2f}".replace(",", " ")
 
 # Configure upload folder and allowed extensions
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['UPLOAD_FOLDER'] = 'static/uploads/profiles'
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -539,6 +551,74 @@ def delete_product(product_id):
         conn.close()
     
     return redirect(url_for('home'))
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    # Get user details from database
+    user = get_user_details(current_user.id)
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        profile_image = None
+        
+        # Handle file upload
+        if 'profile_image' in request.files:
+            file = request.files['profile_image']
+            if file.filename != '' and allowed_file(file.filename):
+                filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
+                os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                profile_image = f"uploads/profiles/{filename}"
+                
+                # Delete old image if exists
+                if user[4]:  # profile_image field
+                    old_path = os.path.join('static', user[4])
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+        
+        if update_user_profile(current_user.id, username, email, profile_image):
+            flash('Profile updated successfully!', 'success')
+            return redirect(url_for('profile'))
+        else:
+            flash('Error updating profile', 'danger')
+    
+    return render_template('profile.html', user=user)
+
+@app.route('/profile/change-password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # Verify current password
+    user = get_user_by_id(current_user.id)
+    if not check_password_hash(user[3], current_password):
+        flash('Current password is incorrect', 'danger')
+        return redirect(url_for('profile'))
+    
+    # Validate new password
+    if new_password != confirm_password:
+        flash('New passwords do not match', 'danger')
+        return redirect(url_for('profile'))
+    
+    if len(new_password) < 8:
+        flash('Password must be at least 8 characters', 'danger')
+        return redirect(url_for('profile'))
+    
+    # Update password
+    new_hash = generate_password_hash(new_password)
+    if update_user_password(current_user.id, new_hash):
+        flash('Password updated successfully! Please login again', 'success')
+        logout_user()
+        return redirect(url_for('login'))
+    else:
+        flash('Error updating password', 'danger')
+        return redirect(url_for('profile'))
+
 
 if __name__ == '__main__':
     app.run(debug=True)
