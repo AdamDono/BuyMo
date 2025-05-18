@@ -4,6 +4,11 @@ import database
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
+import secrets
+import string
+from flask_mail import Message
+
+
 # app.py
 from database import (
     get_db_connection,
