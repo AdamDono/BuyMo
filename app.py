@@ -142,6 +142,25 @@ def forgot_password():
     return render_template('forgot_password.html')
 
 
+@app.route('/change-password', methods=['POST'])
+@login_required
+def change_password():
+    new_password = request.form['new_password']
+    hashed_pw = generate_password_hash(new_password)
+    
+    # Update password in DB
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE users SET password_hash = %s WHERE id = %s",
+        (hashed_pw, current_user.id)
+    )
+    conn.commit()
+    
+    flash("Password updated successfully!")
+    return redirect(url_for('profile'))
+
+
 @app.route('/product/<int:product_id>/review', methods=['POST'])
 @login_required
 def submit_review(product_id):
