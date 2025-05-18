@@ -100,6 +100,48 @@ def product(product_id):
         flash('Product not found.')
         return redirect(url_for('home'))
 
+
+
+def generate_temp_password(length=8):
+    """Create a random temporary password"""
+    chars = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form['email']
+        user = database.get_user_by_email(email)
+        
+        if user:
+            # Generate and save temp password
+            temp_pw = generate_temp_password()
+            hashed_pw = generate_password_hash(temp_pw)
+            
+            # Update user's password in DB
+            conn = database.get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE users SET password_hash = %s WHERE email = %s",
+                (hashed_pw, email)
+            )
+            conn.commit()
+            
+            # Send email with temp password
+            msg = Message(
+                "Your Temporary Password",
+                recipients=[email],
+                html=render_template('email_temp_pw.html', temp_pw=temp_pw)
+            )
+            mail.send(msg)
+        
+        # Always show success (don't reveal if email exists)
+        flash("If this email exists, we've sent a temporary password.")
+        return redirect(url_for('login'))
+    
+    return render_template('forgot_password.html')
+
+
 @app.route('/product/<int:product_id>/review', methods=['POST'])
 @login_required
 def submit_review(product_id):
