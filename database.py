@@ -1,7 +1,6 @@
 import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
 
-
 def get_db_connection():
     conn = psycopg2.connect(
         dbname="ecom_db",
@@ -12,15 +11,12 @@ def get_db_connection():
     )
     return conn
 
-
-
-
 def create_user(username, email, password):
     conn = get_db_connection()
     cur = conn.cursor()
     password_hash = generate_password_hash(
         password,
-        method='pbkdf2:sha256',  # Explicitly set method
+        method='pbkdf2:sha256',
         salt_length=16
     )
     cur.execute(
@@ -44,7 +40,7 @@ def create_tables():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Create cart_items table
+    # Create cart_items table (already exists, keeping for context)
     cur.execute('''
         CREATE TABLE IF NOT EXISTS cart_items (
             id SERIAL PRIMARY KEY,
@@ -57,11 +53,45 @@ def create_tables():
         );
     ''')
 
+    # Create pending_orders table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS pending_orders (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            total_amount DECIMAL(10, 2) NOT NULL,
+            cart_items_json TEXT NOT NULL,  -- Store cart items as JSON
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        );
+    ''')
+
+    # Create orders table for completed orders
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS orders (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            total_amount DECIMAL(10, 2) NOT NULL,
+            order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        );
+    ''')
+
+    # Create order_items table for completed order details
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS order_items (
+            id SERIAL PRIMARY KEY,
+            order_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            price_at_purchase DECIMAL(10, 2) NOT NULL,
+            FOREIGN KEY (order_id) REFERENCES orders (id),
+            FOREIGN KEY (product_id) REFERENCES products (id)
+        );
+    ''')
+
     conn.commit()
     cur.close()
     conn.close()
-
-# database.py
 
 def get_user_details(user_id):
     conn = get_db_connection()
@@ -118,7 +148,6 @@ def update_user_password(user_id, new_password_hash):
     finally:
         cur.close()
         conn.close()
-
 
 # Call the function to create tables
 create_tables()
