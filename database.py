@@ -39,6 +39,8 @@ def get_user_by_email(email):
 def create_tables():
     conn = get_db_connection()
     cur = conn.cursor()
+    
+    
 
     # Create cart_items table (already exists, keeping for context)
     cur.execute('''

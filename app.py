@@ -799,5 +799,44 @@ def load_user(user_id):
                   is_admin=user_data[4])
     return None
 
+
+@app.route('/orders')
+@login_required
+def orders():
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+
+    # Fetch all orders for the current user
+    cur.execute('''
+        SELECT id, total_amount, created_at
+        FROM orders
+        WHERE user_id = %s
+        ORDER BY created_at DESC;
+    ''', (current_user.id,))
+    user_orders = cur.fetchall()
+
+    # Fetch order items for each order
+    order_history = []
+    for order in user_orders:
+        order_id = order[0]
+        cur.execute('''
+            SELECT oi.quantity, oi.price_at_purchase, p.name, p.image
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = %s;
+        ''', (order_id,))
+        items = cur.fetchall()
+        order_history.append({
+            'id': order[0],
+            'total_amount': order[1],
+            'created_at': order[2],
+            'items': items  # List of (quantity, price_at_purchase, product_name, product_image)
+        })
+
+    cur.close()
+    conn.close()
+
+    return render_template('orders.html', orders=order_history)
+
 if __name__ == '__main__':
     app.run(debug=True)
