@@ -32,10 +32,13 @@
                     {% endif %}
                     
                     {% if current_user.is_authenticated %}
+
+               
       
                     <a href="{{ url_for('profile') }}">  <span class="text-light mx-2">
                         <i class="fas fa-user"></i> {{ current_user.username }}
                     </span></a>
+                    <a href="{{ url_for('orders') }}"><i class="fas fa-history"></i> Order History</a>
                         <a href="{{ url_for('logout') }}" class="text-white mx-2">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
