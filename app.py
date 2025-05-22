@@ -799,5 +799,55 @@ def load_user(user_id):
                   is_admin=user_data[4])
     return None
 
+@app.route('/orders')
+@login_required
+def orders():
+    logger.debug("Accessing orders route. User authenticated: %s, User ID: %s", current_user.is_authenticated, current_user.id)
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+
+    # Fetch all pending orders for the current user
+    cur.execute('''
+        SELECT id, total_amount, cart_items_json, created_at
+        FROM pending_orders
+        WHERE user_id = %s
+        ORDER BY created_at DESC;
+    ''', (current_user.id,))
+    pending_orders = cur.fetchall()
+    logger.debug("Pending orders found for user_id %s: %s", current_user.id, pending_orders)
+
+    order_history = []
+    for order in pending_orders:
+        order_id = order[0]
+        cart_items = json.loads(order[2])  # Parse the JSON cart items
+        order_items = []  # Renamed to avoid conflict
+        for item in cart_items:
+            # Fetch product details to get name and image
+            cur.execute('''
+                SELECT name, image
+                FROM products
+                WHERE id = %s;
+            ''', (item['product_id'],))
+            product = cur.fetchone()
+            if product:
+                order_items.append({
+                    'quantity': item['quantity'],
+                    'price_at_purchase': item['price'],
+                    'name': product[0],
+                    'image': product[1]
+                })
+        order_history.append({
+            'id': order[0],
+            'total_amount': order[1],
+            'created_at': order[3] if order[3] else 'Not set',
+            'order_items': order_items  # Renamed key
+        })
+
+    cur.close()
+    conn.close()
+
+    logger.debug("Rendering orders.html with order_history: %s", order_history)
+    return render_template('orders.html', orders=order_history)
+
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Pending Orders{% endblock %}
+
+{% block content %}
+<style>
+    .pending-orders-header {
+        background: linear-gradient(90deg, #1a1a1a, #2c3e50);
+        color: #ffffff;
+        padding: 20px;
+        border-radius: 10px 10px 0 0;
+        margin-bottom: 20px;
+        margin-top: 790px;
+    }
+    .pending-orders-header h2 {
+        margin: 0;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .pending-orders-header p {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+    .card {
+        border: none;
+        border-radius: 10px;
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+    .card-header {
+        background-color: #2c3e50;
+        color: #ffffff;
+        border-bottom: none;
+    }
+    .btn-link {
+        color: #00bcd4 !important;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .btn-link:hover {
+        color: #00acc1 !important;
+    }
+    .list-group-item {
+        background-color: #ffffff;
+        border: none;
+        display: flex;
+        align-items: center;
+        padding: 10px 15px;
+    }
+    .img-thumbnail {
+        border: none;
+        border-radius: 5px;
+    }
+    .total-amount {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    .no-orders {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    /* Mobile responsive adjustments */
+    @media (max-width: 991.98px) {
+        .main-content {
+            padding-top: 120px; /* Increased to ensure clearance below navbar */
+            padding-bottom: 20px;
+        }
+        .pending-orders-header {
+            padding: 15px;
+            margin-top: 40px; /* Increased for more space below navbar */
+            margin-bottom: 15px;
+        }
+        .pending-orders-header h2 {
+            font-size: 1.3rem;
+        }
+        .pending-orders-header p {
+            font-size: 0.75rem;
+        }
+    }
+</style>
+
+<div class="main-content">
+    <div class="container">
+        <div class="pending-orders-header">
+            <h2>Pending Orders</h2>
+            <p>These orders are awaiting payment confirmation. Once processed, they will appear in your order history.</p>
+        </div>
+
+        {% if orders %}
+            <div class="accordion" id="orderAccordion">
+                {% for order in orders %}
+                    <div class="card mb-4">
+                        <div class="card-header" id="heading{{ order.id }}">
+                            <h5 class="mb-0">
+                                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ order.id }}" aria-expanded="true" aria-controls="collapse{{ order.id }}">
+                                    Pending Order #{{ order.id }} - {{ order.created_at }} - <span class="total-amount">{{ order.total_amount | zar }}</span>
+                                </button>
+                            </h5>
+                        </div>
+                        <div id="collapse{{ order.id }}" class="collapse" aria-labelledby="heading{{ order.id }}" data-bs-parent="#orderAccordion">
+                            <div class="card-body">
+                                <h6>Items:</h6>
+                                <ul class="list-group">
+                                    {% for item in order.order_items %}
+                                        <li class="list-group-item d-flex align-items-center">
+                                            {% if item.image %}
+                                                <img src="{{ url_for('static', filename=item.image) }}" alt="{{ item.name }}" class="img-thumbnail me-3" style="width: 50px; height: 50px;">
+                                            {% else %}
+                                                <div class="me-3" style="width: 50px; height: 50px; background-color: #ddd;"></div>
+                                            {% endif %}
+                                            <div>
+                                                <strong>{{ item.name }}</strong><br>
+                                                Quantity: {{ item.quantity }} | Price: {{ item.price_at_purchase | zar }}
+                                            </div>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                                <p class="mt-3"><strong>Total:</strong> <span class="total-amount">{{ order.total_amount | zar }}</span></p>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="no-orders">
+                <p>You have no pending orders yet. Start shopping now!</p>
+                <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg">Shop Now</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/confirm.js') }}"></script>
+{% endblock %}
