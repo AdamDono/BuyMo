@@ -27,23 +27,23 @@ from database import (
 create_tables()
 
 app = Flask(__name__)
-app.secret_key = 'Fliph106'  # Use a secure, unique key in production
+app.secret_key = os.getenv('SECRET_KEY', 'Fliph106')  # Use env var in production
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SESSION_COOKIE_SECURE'] = True  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True on Render with HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Use 'None' for local testing, revert to 'Lax' in production with HTTPS
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Revert to 'Lax' on production HTTPS
 app.config['SESSION_PERMANENT'] = True
-app.config['SESSION_COOKIE_DOMAIN'] = None
-app.config['SESSION_COOKIE_PATH'] = '/'  # Ensure cookie is available for all routes
+app.config['SESSION_COOKIE_PATH'] = '/'
 app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=7)
+app.config['SESSION_COOKIE_NAME'] = 'buyMoSession'
 
-# PayFast Configuration (Replace with your sandbox or live credentials)
+# PayFast Configuration (Update with Render URL post-deploy)
 PAYFAST_MERCHANT_ID = "10039066"  # Sandbox merchant ID
 PAYFAST_MERCHANT_KEY = "gz01ogc2pu5bp"  # Sandbox merchant key
-PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"  # Sandbox URL
-PAYFAST_RETURN_URL = "http://localhost:5000/payfast/return"
-PAYFAST_CANCEL_URL = "http://localhost:5000/cart"
-PAYFAST_NOTIFY_URL = "http://localhost:5000/payfast/notify"
+PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"
+PAYFAST_RETURN_URL = "http://localhost:5000/payfast/return"  # Update to Render URL
+PAYFAST_CANCEL_URL = "http://localhost:5000/cart"  # Update to Render URL
+PAYFAST_NOTIFY_URL = "http://localhost:5000/payfast/notify"  # Update to Render URL
 
 @app.template_filter('zar')
 def format_zar(amount):
@@ -99,8 +99,11 @@ def login():
                 user = User(id=user_data[0], username=user_data[1], email=user_data[2], is_admin=user_data[4])
                 login_user(user, remember=True, force=True)
                 session.permanent = True
+                session['user_id'] = user.id
                 logger.debug("Login successful for user: %s, Session: %s", user.username, session)
                 next_page = request.args.get('next')
+                if 'order_id' in session:
+                    return redirect(url_for('order_confirmation', order_id=session['order_id']))
                 return redirect(next_page or url_for('home'))
             else:
                 logger.debug("Password mismatch for email: %s", email)
@@ -108,7 +111,12 @@ def login():
         else:
             logger.debug("No user found for email: %s", email)
             flash('Invalid email or password.')
-    return render_template('login.html')
+    prefilled_email = None
+    if 'user_id' in session:
+        user_data = database.get_user_by_id(session['user_id'])
+        if user_data:
+            prefilled_email = user_data[2]
+    return render_template('login.html', prefilled_email=prefilled_email)
 
 @app.route('/logout')
 @login_required
@@ -123,8 +131,8 @@ def home():
     logger.debug("Home route hit. Current user authenticated: %s", current_user.is_authenticated)
     logger.debug("Session contents at home: %s", session)
     if not current_user.is_authenticated:
-        logger.debug("User not authenticated, redirecting to login")
-        return redirect(url_for('login'))
+        logger.debug("User not authenticated, redirecting to login with next")
+        return redirect(url_for('login', next=request.url))
 
     conn = database.get_db_connection()
     cur = conn.cursor()
@@ -445,6 +453,7 @@ def checkout():
 def payfast_return():
     logger.debug("PayFast return hit. Current user authenticated: %s", current_user.is_authenticated)
     logger.debug("Session contents: %s", session)
+    logger.debug("Request args: %s", request.args)
 
     user_id = request.args.get('custom_int1')
     logger.debug("Attempting to re-authenticate with user_id: %s", user_id)
@@ -453,18 +462,21 @@ def payfast_return():
             user_data = database.get_user_by_id(int(user_id))
             if user_data:
                 user = User(id=user_data[0], username=user_data[1], email=user_data[2], is_admin=user_data[4])
-                login_user(user, remember=True, force=True)
+                login_user(user, remember=True, force=True, fresh=True)
                 session.permanent = True
                 session['user_id'] = user.id
+                session.modified = True  # Ensure session update
                 logger.debug("User re-authenticated successfully: %s", user.username)
-                flash('Payment processed. Awaiting confirmation...')
-                return redirect(url_for('home'))
+                payment_status = request.args.get('payment_status', '').lower()
+                if payment_status == 'complete':
+                    order_id = request.args.get('m_payment_id')
+                    return redirect(url_for('order_confirmation', order_id=order_id))
+                return redirect(url_for('cart'))  # Redirect to cart on failure
         except ValueError:
             logger.debug("Invalid user_id format: %s", user_id)
     
-    logger.debug("Authentication failed or user_id missing")
-    flash('Session expired. Please log in again.')
-    return redirect(url_for('login'))
+    flash('Payment process interrupted. Please check your cart.')
+    return redirect(url_for('cart'))
 
 @app.route('/payfast/notify', methods=['POST'])
 def payfast_notify():
@@ -806,7 +818,6 @@ def orders():
     conn = database.get_db_connection()
     cur = conn.cursor()
 
-    # Fetch all pending orders for the current user
     cur.execute('''
         SELECT id, total_amount, cart_items_json, created_at
         FROM pending_orders
@@ -819,10 +830,9 @@ def orders():
     order_history = []
     for order in pending_orders:
         order_id = order[0]
-        cart_items = json.loads(order[2])  # Parse the JSON cart items
-        order_items = []  # Renamed to avoid conflict
+        cart_items = json.loads(order[2])
+        order_items = []
         for item in cart_items:
-            # Fetch product details to get name and image
             cur.execute('''
                 SELECT name, image
                 FROM products
@@ -840,7 +850,7 @@ def orders():
             'id': order[0],
             'total_amount': order[1],
             'created_at': order[3] if order[3] else 'Not set',
-            'order_items': order_items  # Renamed key
+            'order_items': order_items
         })
 
     cur.close()
@@ -848,6 +858,21 @@ def orders():
 
     logger.debug("Rendering orders.html with order_history: %s", order_history)
     return render_template('orders.html', orders=order_history)
+
+@app.route('/order_confirmation/<int:order_id>')
+@login_required
+def order_confirmation(order_id):
+    logger.debug("Order confirmation hit for order_id: %s, User authenticated: %s", order_id, current_user.is_authenticated)
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT total_amount, created_at FROM orders WHERE id = %s AND user_id = %s', (order_id, current_user.id))
+    order = cur.fetchone()
+    cur.close()
+    conn.close()
+    if order:
+        return render_template('order_confirmation.html', order={'id': order_id, 'total_amount': order[0], 'created_at': order[1]})
+    flash('Order not found.')
+    return redirect(url_for('home'))
 
 if __name__ == '__main__':
     app.run(debug=True)

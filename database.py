@@ -1,13 +1,19 @@
 import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
 
 def get_db_connection():
+    db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    from urllib.parse import urlparse
+    url = urlparse(db_url)
     conn = psycopg2.connect(
-        dbname="ecom_db",
-        user="postgres",
-        password="Fliph106",
-        host="localhost",
-        port="5433"
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port or 5432
     )
     return conn
 
@@ -40,9 +46,54 @@ def create_tables():
     conn = get_db_connection()
     cur = conn.cursor()
     
+    # Users table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            email VARCHAR(120) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            is_admin BOOLEAN DEFAULT FALSE,
+            profile_image VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    ''')
     
-
-    # Create cart_items table (already exists, keeping for context)
+    # Categories table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS categories (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(50) NOT NULL UNIQUE
+        );
+    ''')
+    
+    # Products table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            description TEXT,
+            image VARCHAR(255),
+            category_id INTEGER REFERENCES categories(id),
+            initial_quantity INTEGER NOT NULL,
+            remaining_quantity INTEGER NOT NULL
+        );
+    ''')
+    
+    # Reviews table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS reviews (
+            id SERIAL PRIMARY KEY,
+            product_id INTEGER REFERENCES products(id),
+            user_id INTEGER REFERENCES users(id),
+            rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+            comment TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    ''')
+    
+    # Cart items table
     cur.execute('''
         CREATE TABLE IF NOT EXISTS cart_items (
             id SERIAL PRIMARY KEY,
@@ -54,20 +105,20 @@ def create_tables():
             FOREIGN KEY (product_id) REFERENCES products (id)
         );
     ''')
-
-    # Create pending_orders table
+    
+    # Pending orders table
     cur.execute('''
         CREATE TABLE IF NOT EXISTS pending_orders (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             total_amount DECIMAL(10, 2) NOT NULL,
-            cart_items_json TEXT NOT NULL,  -- Store cart items as JSON
+            cart_items_json TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
         );
     ''')
-
-    # Create orders table for completed orders
+    
+    # Orders table for completed orders
     cur.execute('''
         CREATE TABLE IF NOT EXISTS orders (
             id SERIAL PRIMARY KEY,
@@ -77,8 +128,8 @@ def create_tables():
             FOREIGN KEY (user_id) REFERENCES users (id)
         );
     ''')
-
-    # Create order_items table for completed order details
+    
+    # Order items table for completed order details
     cur.execute('''
         CREATE TABLE IF NOT EXISTS order_items (
             id SERIAL PRIMARY KEY,
@@ -90,7 +141,7 @@ def create_tables():
             FOREIGN KEY (product_id) REFERENCES products (id)
         );
     ''')
-
+    
     conn.commit()
     cur.close()
     conn.close()
