@@ -41,9 +41,9 @@ app.config['SESSION_COOKIE_NAME'] = 'buyMoSession'
 PAYFAST_MERCHANT_ID = "10039066"  # Sandbox merchant ID
 PAYFAST_MERCHANT_KEY = "gz01ogc2pu5bp"  # Sandbox merchant key
 PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"
-PAYFAST_RETURN_URL = "http://localhost:5000/payfast/return"  # Update to Render URL
-PAYFAST_CANCEL_URL = "http://localhost:5000/cart"  # Update to Render URL
-PAYFAST_NOTIFY_URL = "http://localhost:5000/payfast/notify"  # Update to Render URL
+PAYFAST_RETURN_URL = "https://buymo.onrender.com/payfast/return"  # Updated
+PAYFAST_CANCEL_URL = "https://buymo.onrender.com/cart"  # Updated
+PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"  # Updated
 
 @app.template_filter('zar')
 def format_zar(amount):
