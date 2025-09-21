@@ -27,6 +27,102 @@ from database import (
 create_tables()
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'Fliph106')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['SESSION_COOKIE_SECURE'] = True  # True for Render HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_PERMANENT'] = True
+app.config['SESSION_COOKIE_PATH'] = '/'
+app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=7)
+app.config['SESSION_COOKIE_NAME'] = 'buyMoSession'
+
+# PayFast Configuration
+PAYFAST_MERCHANT_ID = "10039066"
+PAYFAST_MERCHANT_KEY = "gz01ogc2pu5bp"
+PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"
+PAYFAST_RETURN_URL = "https://buymo.onrender.com/payfast/return"
+PAYFAST_CANCEL_URL = "https://buymo.onrender.com/cart"
+PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
+
+@app.template_filter('zar')
+def format_zar(amount):
+    return f"R{amount:,.2f}".replace(",", " ")
+
+# Configure upload folder and allowed extensions
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['UPLOAD_FOLDER_PROFILES'] = 'static/uploads/profiles'
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+# Routes
+@app.route('/')
+def index():
+    return redirect(url_for('signup'))
+
+@app.route('/get-started')
+def get_started():
+    return render_template('get_started.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+
+        user = database.get_user_by_email(email)
+        if user:
+            flash('Email already registered. Please login.')
+            return redirect(url_for('login'))
+
+        database.create_user(username, email, password)
+        flash('Registration successful! Please login.')
+        return redirect(url_for('login'))
+    return render_template('signup.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+
+        user_data = database.get_user_by_email(email)
+        logger.debug("Login attempt - Email: %s, User data: %s", email, user_data)
+        if user_data:
+            password_hash = user_data```python
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, session
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+import database
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+import os
+import json
+import requests
+from urllib.parse import urlencode
+import logging
+from datetime import timedelta
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Database imports and table creation
+from database import (
+    get_db_connection,
+    get_user_details,
+    get_user_by_id,
+    update_user_profile,
+    update_user_password,
+    create_tables
+)
+
+# Create tables if they don't exist
+create_tables()
+
+app = Flask(__name__)
 app.secret_key = 'Fliph106'  # Use a secure, unique key in production
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 app.config['SESSION_COOKIE_SECURE'] = True  # Set to True in production with HTTPS
