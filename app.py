@@ -47,7 +47,12 @@ PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
 
 @app.template_filter('zar')
 def format_zar(amount):
-    return f"R{amount:,.2f}".replace(",", " ")
+    if amount is None:
+        return "R0.00"
+    try:
+        return f"R{float(amount):,.2f}".replace(",", " ")
+    except (ValueError, TypeError):
+        return "R0.00"
 
 # Configure upload folder and allowed extensions
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -821,9 +826,9 @@ def orders():
         order_items = cur.fetchall()
         order_history.append({
             'id': order_id,
-            'total_amount': order[1],
+            'total_amount': float(order[1]),  # Convert Decimal to float for template
             'order_date': order[2],
-            'order_items': order_items
+            'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
         })
 
     cur.close()

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Pending Orders{% endblock %}
+{% block title %}Order History{% endblock %}
 
 {% block content %}
 <style>
@@ -91,8 +91,8 @@
 <div class="main-content">
     <div class="container">
         <div class="pending-orders-header">
-            <h2>Pending Orders</h2>
-            <p>These orders are awaiting payment confirmation. Once processed, they will appear in your order history.</p>
+            <h2>Order History</h2>
+            <p>View your completed orders below.</p>
         </div>
 
         {% if orders %}
@@ -102,7 +102,7 @@
                         <div class="card-header" id="heading{{ order.id }}">
                             <h5 class="mb-0">
                                 <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ order.id }}" aria-expanded="true" aria-controls="collapse{{ order.id }}">
-                                    Pending Order #{{ order.id }} - {{ order.created_at }} - <span class="total-amount">{{ order.total_amount | zar }}</span>
+                                    Order #{{ order.id }} - {{ order.order_date.strftime('%Y-%m-%d %H:%M:%S') }} - <span class="total-amount">{{ order.total_amount | zar }}</span>
                                 </button>
                             </h5>
                         </div>
@@ -132,7 +132,7 @@
             </div>
         {% else %}
             <div class="no-orders">
-                <p>You have no pending orders yet. Start shopping now!</p>
+                <p>You have no completed orders yet. Start shopping now!</p>
                 <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg">Shop Now</a>
             </div>
         {% endif %}
