@@ -93,102 +93,6 @@ def login():
         user_data = database.get_user_by_email(email)
         logger.debug("Login attempt - Email: %s, User data: %s", email, user_data)
         if user_data:
-            password_hash = user_data```python
-from flask import Flask, render_template, request, redirect, url_for, flash, abort, session
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-import database
-from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
-import os
-import json
-import requests
-from urllib.parse import urlencode
-import logging
-from datetime import timedelta
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
-# Database imports and table creation
-from database import (
-    get_db_connection,
-    get_user_details,
-    get_user_by_id,
-    update_user_profile,
-    update_user_password,
-    create_tables
-)
-
-# Create tables if they don't exist
-create_tables()
-
-app = Flask(__name__)
-app.secret_key = 'Fliph106'  # Use a secure, unique key in production
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SESSION_COOKIE_SECURE'] = True  # Set to True in production with HTTPS
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Use 'None' for local testing, revert to 'Lax' in production with HTTPS
-app.config['SESSION_PERMANENT'] = True
-app.config['SESSION_COOKIE_DOMAIN'] = None
-app.config['SESSION_COOKIE_PATH'] = '/'  # Ensure cookie is available for all routes
-app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=7)
-
-# PayFast Configuration (Replace with your sandbox or live credentials)
-PAYFAST_MERCHANT_ID = "10039066"  # Sandbox merchant ID
-PAYFAST_MERCHANT_KEY = "gz01ogc2pu5bp"  # Sandbox merchant key
-PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"  # Sandbox URL
-PAYFAST_RETURN_URL = "http://localhost:5000/payfast/return"
-PAYFAST_CANCEL_URL = "http://localhost:5000/cart"
-PAYFAST_NOTIFY_URL = "http://localhost:5000/payfast/notify"
-
-@app.template_filter('zar')
-def format_zar(amount):
-    return f"R{amount:,.2f}".replace(",", " ")
-
-# Configure upload folder and allowed extensions
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['UPLOAD_FOLDER_PROFILES'] = 'static/uploads/profiles'
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
-
-# Routes
-@app.route('/')
-def index():
-    return redirect(url_for('signup'))
-
-@app.route('/get-started')
-def get_started():
-    return render_template('get_started.html')
-
-@app.route('/signup', methods=['GET', 'POST'])
-def signup():
-    if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-
-        user = database.get_user_by_email(email)
-        if user:
-            flash('Email already registered. Please login.')
-            return redirect(url_for('login'))
-
-        database.create_user(username, email, password)
-        flash('Registration successful! Please login.')
-        return redirect(url_for('login'))
-    return render_template('signup.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-
-        user_data = database.get_user_by_email(email)
-        logger.debug("Login attempt - Email: %s, User data: %s", email, user_data)
-        if user_data:
             password_hash = user_data[3]
             logger.debug("Stored password hash: %s", password_hash)
             if check_password_hash(password_hash, password):
@@ -365,18 +269,12 @@ def add_product():
         description = request.form.get('description')
         category_id = request.form.get('category')
         quantity = int(request.form.get('quantity', 10))
-        image = request.files.get('image')
+        # Temporarily disable image upload due to Render's ephemeral filesystem
+        image_url = None  # Default to None for now
 
         if not all([name, price, category_id]):
             flash('Name, Price, and Category are required.')
             return redirect(url_for('add_product'))
-
-        image_url = None
-        if image and allowed_file(image.filename):
-            filename = secure_filename(image.filename)
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            image.save(image_path)
-            image_url = f"uploads/{filename}"
 
         try:
             conn = database.get_db_connection()
@@ -723,14 +621,14 @@ def edit_product(product_id):
         
         if request.method == 'POST':
             image_url = product[4]  # Existing image path
-            
-            if 'image' in request.files:
-                image = request.files['image']
-                if image.filename != '' and allowed_file(image.filename):
-                    filename = secure_filename(image.filename)
-                    image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    image.save(image_path)
-                    image_url = f"uploads/{filename}"
+            # Temporarily disable image upload due to Render's ephemeral filesystem
+            # if 'image' in request.files:
+            #     image = request.files['image']
+            #     if image.filename != '' and allowed_file(image.filename):
+            #         filename = secure_filename(image.filename)
+            #         image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            #         image.save(image_path)
+            #         image_url = f"uploads/{filename}"
             
             cur.execute('''
                 UPDATE products 
@@ -793,18 +691,19 @@ def profile():
         email = request.form.get('email')
         profile_image = None
         
-        if 'profile_image' in request.files:
-            file = request.files['profile_image']
-            if file.filename != '' and allowed_file(file.filename):
-                filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
-                os.makedirs(app.config['UPLOAD_FOLDER_PROFILES'], exist_ok=True)
-                file.save(os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename))
-                profile_image = f"uploads/profiles/{filename}"
-                
-                if user[4]:  # Delete old image if exists
-                    old_path = os.path.join('static', user[4])
-                    if os.path.exists(old_path):
-                        os.remove(old_path)
+        # Temporarily disable profile image upload due to Render's ephemeral filesystem
+        # if 'profile_image' in request.files:
+        #     file = request.files['profile_image']
+        #     if file.filename != '' and allowed_file(file.filename):
+        #         filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
+        #         os.makedirs(app.config['UPLOAD_FOLDER_PROFILES'], exist_ok=True)
+        #         file.save(os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename))
+        #         profile_image = f"uploads/profiles/{filename}"
+        #         
+        #         if user[4]:  # Delete old image if exists
+        #             old_path = os.path.join('static', user[4])
+        #             if os.path.exists(old_path):
+        #                 os.remove(old_path)
         
         if update_user_profile(current_user.id, username, email, profile_image):
             flash('Profile updated successfully!', 'success')
@@ -901,41 +800,30 @@ def orders():
     conn = database.get_db_connection()
     cur = conn.cursor()
 
-    # Fetch all pending orders for the current user
+    # Fetch completed orders
     cur.execute('''
-        SELECT id, total_amount, cart_items_json, created_at
-        FROM pending_orders
-        WHERE user_id = %s
-        ORDER BY created_at DESC;
+        SELECT o.id, o.total_amount, o.order_date
+        FROM orders o
+        WHERE o.user_id = %s
+        ORDER BY o.order_date DESC;
     ''', (current_user.id,))
-    pending_orders = cur.fetchall()
-    logger.debug("Pending orders found for user_id %s: %s", current_user.id, pending_orders)
+    completed_orders = cur.fetchall()
 
     order_history = []
-    for order in pending_orders:
+    for order in completed_orders:
         order_id = order[0]
-        cart_items = json.loads(order[2])  # Parse the JSON cart items
-        order_items = []  # Renamed to avoid conflict
-        for item in cart_items:
-            # Fetch product details to get name and image
-            cur.execute('''
-                SELECT name, image
-                FROM products
-                WHERE id = %s;
-            ''', (item['product_id'],))
-            product = cur.fetchone()
-            if product:
-                order_items.append({
-                    'quantity': item['quantity'],
-                    'price_at_purchase': item['price'],
-                    'name': product[0],
-                    'image': product[1]
-                })
+        cur.execute('''
+            SELECT p.name, p.image, oi.quantity, oi.price_at_purchase
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = %s;
+        ''', (order_id,))
+        order_items = cur.fetchall()
         order_history.append({
-            'id': order[0],
+            'id': order_id,
             'total_amount': order[1],
-            'created_at': order[3] if order[3] else 'Not set',
-            'order_items': order_items  # Renamed key
+            'order_date': order[2],
+            'order_items': order_items
         })
 
     cur.close()
