@@ -10,7 +10,7 @@
         padding: 20px;
         border-radius: 10px 10px 0 0;
         margin-bottom: 20px;
-        margin-top: 790px;
+        margin-top: 120px; /* Reduced from 790px for better spacing */
     }
     .pending-orders-header h2 {
         margin: 0;
@@ -55,6 +55,9 @@
     .img-thumbnail {
         border: none;
         border-radius: 5px;
+        width: 50px;
+        height: 50px;
+        object-fit: cover; /* Ensure images fit without distortion */
     }
     .total-amount {
         font-size: 1.1rem;
@@ -76,7 +79,7 @@
         }
         .pending-orders-header {
             padding: 15px;
-            margin-top: 40px; /* Increased for more space below navbar */
+            margin-top: 40px; /* Adjusted for better mobile spacing */
             margin-bottom: 15px;
         }
         .pending-orders-header h2 {
@@ -113,7 +116,7 @@
                                     {% for item in order.order_items %}
                                         <li class="list-group-item d-flex align-items-center">
                                             {% if item.image %}
-                                                <img src="{{ url_for('static', filename=item.image) }}" alt="{{ item.name }}" class="img-thumbnail me-3" style="width: 50px; height: 50px;">
+                                                <img src="{{ url_for('static', filename=item.image) }}" alt="{{ item.name }}" class="img-thumbnail me-3">
                                             {% else %}
                                                 <div class="me-3" style="width: 50px; height: 50px; background-color: #ddd;"></div>
                                             {% endif %}
@@ -139,5 +142,5 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/confirm.js') }}"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script> <!-- Temporarily fallback to main.js -->
 {% endblock %}
