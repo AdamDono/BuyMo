@@ -274,8 +274,7 @@ def add_product():
         description = request.form.get('description')
         category_id = request.form.get('category')
         quantity = int(request.form.get('quantity', 10))
-        # Temporarily disable image upload due to Render's ephemeral filesystem
-        image_url = None  # Default to None for now
+        image_url = 'uploads/default-product.png'  # Default image for now
 
         if not all([name, price, category_id]):
             flash('Name, Price, and Category are required.')
@@ -295,6 +294,7 @@ def add_product():
         except Exception as e:
             logger.debug(f"Error adding product: {str(e)}")
             flash('An error occurred while adding the product.')
+            conn.rollback()
         finally:
             cur.close()
             conn.close()
@@ -694,22 +694,19 @@ def profile():
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
-        profile_image = None
+        profile_image = user[4]  # Keep existing image if no new upload
         
-        # Temporarily disable profile image upload due to Render's ephemeral filesystem
-        # if 'profile_image' in request.files:
-        #     file = request.files['profile_image']
-        #     if file.filename != '' and allowed_file(file.filename):
-        #         filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
-        #         os.makedirs(app.config['UPLOAD_FOLDER_PROFILES'], exist_ok=True)
-        #         file.save(os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename))
-        #         profile_image = f"uploads/profiles/{filename}"
-        #         
-        #         if user[4]:  # Delete old image if exists
-        #             old_path = os.path.join('static', user[4])
-        #             if os.path.exists(old_path):
-        #                 os.remove(old_path)
-        
+        if 'profile_image' in request.files:
+            file = request.files['profile_image']
+            if file.filename != '' and allowed_file(file.filename):
+                filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
+                os.makedirs(app.config['UPLOAD_FOLDER_PROFILES'], exist_ok=True)
+                file.save(os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename))
+                profile_image = f"uploads/profiles/{filename}"
+                # Delete old image if it exists
+                if user[4] and os.path.exists(os.path.join('static', user[4])):
+                    os.remove(os.path.join('static', user[4]))
+
         if update_user_profile(current_user.id, username, email, profile_image):
             flash('Profile updated successfully!', 'success')
             return redirect(url_for('profile'))
@@ -756,13 +753,14 @@ def change_password():
             (hashed_pw, current_user.id)
         )
         conn.commit()
+        logger.debug("Password updated successfully for user ID: %s", current_user.id)
         flash("Password updated successfully!", "success")
 
     except Exception as e:
         if conn:
             conn.rollback()
+        logger.error("Error updating password: %s", str(e))
         flash(f"Error updating password: {str(e)}", "error")
-        
     finally:
         if conn:
             conn.close()

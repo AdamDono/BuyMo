@@ -6,7 +6,7 @@
     
     <form method="POST" enctype="multipart/form-data" class="profile-form">
         <div class="profile-picture">
-            <img src="{{ url_for('static', filename=user[4] if user[4] else 'images/default-profile.png') }}" 
+            <img src="{{ url_for('static', filename=user[4] if user[4] else 'uploads/profiles/default-profile.png') }}" 
                  id="profile-preview">
             <label for="profile-upload" class="upload-btn">
                 <i class="fas fa-camera"></i> Change Photo
