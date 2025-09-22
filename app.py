@@ -282,7 +282,8 @@ def add_product():
             return redirect(url_for('add_product'))
 
         if image and allowed_file(image.filename):
-            filename = secure_filename(f"product_{name.replace(' ', '_')}_{product_id}.jpg")
+            # Generate a unique filename using timestamp and user ID
+            filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.jpg")
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             image.save(file_path)
@@ -295,10 +296,12 @@ def add_product():
                 INSERT INTO products 
                 (name, price, description, image, category_id, initial_quantity, remaining_quantity)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             ''', (name, float(price), description, image_url, int(category_id), quantity, quantity))
+            new_product_id = cur.fetchone()[0]
             conn.commit()
             flash('Product added successfully!')
-            return redirect(url_for('home'))
+            return redirect(url_for('product', product_id=new_product_id))
         except Exception as e:
             logger.debug(f"Error adding product: {str(e)}")
             flash('An error occurred while adding the product.')
@@ -831,4 +834,5 @@ def orders():
     return render_template('orders.html', orders=order_history)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    import time  # Added for timestamp in filename
+    app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render

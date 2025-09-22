@@ -37,10 +37,16 @@
                     <tr>
                         <td>
                             <div class="d-flex align-items-center">
-                                <img src="{{ url_for('static', filename=item[4]) }}" 
-                                     alt="{{ item[2] }}" 
-                                     class="product-image me-3"
-                                     onerror="this.src='{{ url_for('static', filename='uploads/default-product.png') }}'">
+                                {% if item[4] and item[4] != 'uploads/default-product.png' %}
+                                    <img src="{{ url_for('static', filename=item[4]) }}" 
+                                         alt="{{ item[2] }}" 
+                                         class="product-image me-3"
+                                         onerror="this.src='{{ url_for('static', filename='uploads/default-product.png') }}'">
+                                {% else %}
+                                    <img src="{{ url_for('static', filename='uploads/default-product.png') }}" 
+                                         alt="{{ item[2] }}" 
+                                         class="product-image me-3">
+                                {% endif %}
                                 <span>{{ item[2] }}</span> <!-- item[2] is p.name -->
                             </div>
                         </td>
