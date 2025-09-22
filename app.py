@@ -274,11 +274,19 @@ def add_product():
         description = request.form.get('description')
         category_id = request.form.get('category')
         quantity = int(request.form.get('quantity', 10))
+        image = request.files.get('image')
         image_url = 'uploads/default-product.png'  # Default image
 
         if not all([name, price, category_id]):
             flash('Name, Price, and Category are required.')
             return redirect(url_for('add_product'))
+
+        if image and allowed_file(image.filename):
+            filename = secure_filename(f"product_{name.replace(' ', '_')}_{product_id}.jpg")
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            image.save(file_path)
+            image_url = f"uploads/{filename}"
 
         try:
             conn = database.get_db_connection()
@@ -347,14 +355,14 @@ def cart():
     cur = conn.cursor()
     
     cur.execute('''
-        SELECT ci.id, p.name, p.price, p.image, ci.quantity 
+        SELECT ci.id, p.id, p.name, p.price, p.image, ci.quantity 
         FROM cart_items ci
         JOIN products p ON ci.product_id = p.id
         WHERE ci.user_id = %s
     ''', (current_user.id,))
     cart_items = cur.fetchall()
 
-    total_price = sum(item[2] * item[4] for item in cart_items) if cart_items else 0
+    total_price = sum(item[3] * item[5] for item in cart_items) if cart_items else 0
     
     cur.close()
     conn.close()
@@ -663,6 +671,7 @@ def delete_product(product_id):
     try:
         cur = conn.cursor()
         cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+        cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
         cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
         conn.commit()
         flash('Product deleted successfully')

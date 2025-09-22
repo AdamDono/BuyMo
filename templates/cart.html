@@ -37,25 +37,25 @@
                     <tr>
                         <td>
                             <div class="d-flex align-items-center">
-                                <img src="{{ url_for('static', filename=item[3]) }}" 
-                                     alt="{{ item[1] }}" 
+                                <img src="{{ url_for('static', filename=item[4]) }}" 
+                                     alt="{{ item[2] }}" 
                                      class="product-image me-3"
-                                     onerror="this.src='{{ url_for('static', filename='images/placeholder.jpg') }}'">
-                                <span>{{ item[1] }}</span>
+                                     onerror="this.src='{{ url_for('static', filename='uploads/default-product.png') }}'">
+                                <span>{{ item[2] }}</span> <!-- item[2] is p.name -->
                             </div>
                         </td>
-                        <td>{{ item[2]|zar }}</td>
+                        <td>{{ item[3]|zar }}</td> <!-- item[3] is p.price -->
                         <td>
                             <form action="{{ url_for('update_cart', item_id=item[0]) }}" method="POST" class="quantity-form">
                                 <input type="number" name="quantity" 
-                                       value="{{ item[4] }}" min="1" 
+                                       value="{{ item[5] }}" min="1" 
                                        class="quantity-input">
                                 <button type="submit" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
                             </form>
                         </td>
-                        <td>{{ (item[2] * item[4])|zar }}</td>
+                        <td>{{ (item[3] * item[5])|zar }}</td> <!-- item[3] * item[5] for total -->
                         <td>
                             <form action="{{ url_for('remove_from_cart', item_id=item[0]) }}" method="POST">
                                 <button type="submit" class="btn btn-danger btn-sm">
