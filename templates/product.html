@@ -15,7 +15,7 @@
             max-width: 1200px;
             margin: 30px auto;
             padding: 20px;
-            margin-top:1000px
+            margin-top: 1000px; /* Adjusted for layout, consider reducing if unintended */
         }
         .product-main {
             display: flex;
@@ -170,7 +170,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <h1 class="h4 mb-0">
                     <a href="{{ url_for('home') }}" class="text-white text-decoration-none">
-                        <i class="fas fa-store"></i>BuyMo
+                        <i class="fas fa-store"></i> BuyMo
                     </a>
                 </h1>
                 <nav>
@@ -184,13 +184,13 @@
                         <a href="{{ url_for('add_product') }}" class="text-white mx-2">
                             <i class="fas fa-plus-circle"></i> Add Product
                         </a>
-                      
                     {% endif %}
                     {% if current_user.is_authenticated %}
-                    
-                    <a href="{{ url_for('profile') }}">  <span class="text-light mx-2">
-                        <i class="fas fa-user"></i> {{ current_user.username }}
-                    </span></a>
+                        <a href="{{ url_for('profile') }}">
+                            <span class="text-light mx-2">
+                                <i class="fas fa-user"></i> {{ current_user.username }}
+                            </span>
+                        </a>
                         <a href="{{ url_for('logout') }}" class="text-white mx-2">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
@@ -212,23 +212,21 @@
             <!-- Main Product Details -->
             <div class="product-main">
                 <div class="product-image">
-                    <img src="{{ url_for('static', filename=product[4]) }}" 
+                    <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}" 
                          alt="{{ product[1] }}"
-                         onerror="this.src='{{ url_for('static', filename='images/placeholder.jpg') }}'">
+                         onerror="this.src='{{ url_for('static', filename='uploads/default-product.png') }}'">
                 </div>
                 <div class="product-info">
                     <h1 class="product-title">{{ product[1] }}</h1>
-                    <div class="product-price">R{{ "%.2f"|format(product[2]) }}</div>
+                    <div class="product-price">{{ product[2] | zar }}</div>
                     
                     {% if current_user.is_admin %}
-                    <!-- Admin sees exact quantity -->
                     <div class="admin-stock">
-                        Stock: {{ product[5] }}/{{ product[6] }}  <!-- Indexes 5 and 6 for quantities -->
+                        Stock: {{ product[5] }}/{{ product[6] }} <!-- Indexes 5 and 6 for quantities -->
                     </div>
-                {% else %}
-                    <!-- Customer sees status -->
+                    {% else %}
                     <div class="customer-availability">
-                        {% if product[5] > 10 %}  <!-- Index 5 = remaining_quantity -->
+                        {% if product[5] > 10 %} <!-- Index 5 = remaining_quantity -->
                             <span class="in-stock">Available</span>
                         {% elif product[5] > 0 %}
                             <span class="low-stock">Selling Fast!</span>
@@ -236,10 +234,8 @@
                             <span class="out-of-stock">Out of Stock</span>
                         {% endif %}
                     </div>
-                {% endif %}
-                
-         
-
+                    {% endif %}
+                    
                     <div class="product-meta">
                         <p><strong>Category:</strong> {{ product[8] }}</p>
                         <div class="product-rating">
@@ -254,7 +250,7 @@
                     
                     <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="product-actions">
                         <input type="number" id="quantity" name="quantity" 
-                               class="quantity-input" value="1" min="1" max="10">
+                               class="quantity-input" value="1" min="1" max="{{ product[5] if product[5] else 10 }}">
                         <button type="submit" class="btn-primary">
                             <i class="fas fa-cart-plus"></i> Add to Cart
                         </button>
@@ -326,11 +322,11 @@
                     {% for related_product in related_products %}
                     <div class="related-product-card">
                         <a href="{{ url_for('product', product_id=related_product[0]) }}" class="text-decoration-none">
-                            <img src="{{ url_for('static', filename=related_product[4]) }}" 
+                            <img src="{{ url_for('static', filename=related_product[4] if related_product[4] else 'uploads/default-product.png') }}" 
                                  alt="{{ related_product[1] }}"
-                                 onerror="this.src='{{ url_for('static', filename='images/placeholder.jpg') }}'">
+                                 onerror="this.src='{{ url_for('static', filename='uploads/default-product.png') }}'">
                             <h4 class="related-product-title">{{ related_product[1] }}</h4>
-                            <p class="related-product-price">${{ "%.2f"|format(related_product[2]) }}</p>
+                            <p class="related-product-price">{{ related_product[2] | zar }}</p>
                         </a>
                     </div>
                     {% endfor %}

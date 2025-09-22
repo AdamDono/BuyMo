@@ -29,7 +29,7 @@ create_tables()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Fliph106')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SESSION_COOKIE_SECURE'] = True  # True for Render HTTPS
+app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_PERMANENT'] = True
@@ -274,7 +274,7 @@ def add_product():
         description = request.form.get('description')
         category_id = request.form.get('category')
         quantity = int(request.form.get('quantity', 10))
-        image_url = 'uploads/default-product.png'  # Default image for now
+        image_url = 'uploads/default-product.png'  # Default image
 
         if not all([name, price, category_id]):
             flash('Name, Price, and Category are required.')
@@ -625,29 +625,17 @@ def edit_product(product_id):
         categories = cur.fetchall()
         
         if request.method == 'POST':
-            image_url = product[4]  # Existing image path
-            # Temporarily disable image upload due to Render's ephemeral filesystem
-            # if 'image' in request.files:
-            #     image = request.files['image']
-            #     if image.filename != '' and allowed_file(image.filename):
-            #         filename = secure_filename(image.filename)
-            #         image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            #         image.save(image_path)
-            #         image_url = f"uploads/{filename}"
-            
+            name = request.form['name']
+            price = float(request.form['price'])
+            description = request.form['description']
+            category_id = int(request.form['category'])
+            image_url = product[4]  # Keep existing image
+
             cur.execute('''
                 UPDATE products 
-                SET name = %s, price = %s, description = %s,
-                    image = %s, category_id = %s
+                SET name = %s, price = %s, description = %s, image = %s, category_id = %s
                 WHERE id = %s
-            ''', (
-                request.form['name'],
-                float(request.form['price']),
-                request.form['description'],
-                image_url,
-                int(request.form['category']),
-                product_id
-            ))
+            ''', (name, price, description, image_url, category_id, product_id))
             
             conn.commit()
             flash('Product updated successfully!')
@@ -700,20 +688,18 @@ def profile():
             file = request.files['profile_image']
             if file.filename != '' and allowed_file(file.filename):
                 filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
-                os.makedirs(app.config['UPLOAD_FOLDER_PROFILES'], exist_ok=True)
-                file.save(os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename))
+                file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                file.save(file_path)
                 profile_image = f"uploads/profiles/{filename}"
-                # Delete old image if it exists
-                if user[4] and os.path.exists(os.path.join('static', user[4])):
-                    os.remove(os.path.join('static', user[4]))
+                # Note: Render's ephemeral filesystem means this file may not persist across redeploys
 
         if update_user_profile(current_user.id, username, email, profile_image):
             flash('Profile updated successfully!', 'success')
-            return redirect(url_for('profile'))
         else:
             flash('Error updating profile', 'danger')
     
-    return render_template('profile.html', user=user)
+    return render_template('profile.html', user=get_user_details(current_user.id))
 
 @app.route('/change-password', methods=['POST'])
 @login_required
