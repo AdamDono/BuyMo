@@ -29,7 +29,7 @@ create_tables()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Fliph106')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_SECURE'] = True  # True for Render HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_PERMANENT'] = True
@@ -699,7 +699,7 @@ def profile():
         else:
             flash('Error updating profile', 'danger')
     
-    return render_template('profile.html', user=get_user_details(current_user.id))
+    return render_template('profile.html', user=user)
 
 @app.route('/change-password', methods=['POST'])
 @login_required
@@ -745,7 +745,7 @@ def change_password():
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error("Error updating password: %s", str(e))
+        logger.error("Error updating password: {0}".format(str(e)))
         flash(f"Error updating password: {str(e)}", "error")
     finally:
         if conn:
