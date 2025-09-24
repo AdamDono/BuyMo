@@ -9,7 +9,7 @@ import requests
 from urllib.parse import urlencode
 import logging
 from datetime import timedelta
-import time  # Added to resolve NameError
+import time  # Added for timestamp in filename
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -283,7 +283,6 @@ def add_product():
             return redirect(url_for('add_product'))
 
         if image and allowed_file(image.filename):
-            # Generate a unique filename using timestamp and user ID
             filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.jpg")
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -359,14 +358,14 @@ def cart():
     cur = conn.cursor()
     
     cur.execute('''
-        SELECT ci.id, p.id, p.name, p.price, p.image, ci.quantity 
+        SELECT ci.id, p.name, p.price, p.image, ci.quantity 
         FROM cart_items ci
         JOIN products p ON ci.product_id = p.id
         WHERE ci.user_id = %s
     ''', (current_user.id,))
     cart_items = cur.fetchall()
 
-    total_price = sum(item[3] * item[5] for item in cart_items) if cart_items else 0
+    total_price = sum(item[2] * item[4] for item in cart_items) if cart_items else 0
     
     cur.close()
     conn.close()
@@ -825,7 +824,7 @@ def orders():
             'id': order_id,
             'total_amount': float(order[1]),  # Convert Decimal to float for template
             'order_date': order[2],
-            'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
+            'order_items': [{'name': item[0], 'image': item[1] if item[1] else 'uploads/default-product.png', 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
         })
 
     cur.close()
@@ -835,4 +834,4 @@ def orders():
     return render_template('orders.html', orders=order_history)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render
+    app.run(debug=True)
