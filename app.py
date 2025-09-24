@@ -9,6 +9,7 @@ import requests
 from urllib.parse import urlencode
 import logging
 from datetime import timedelta
+import time  # Added to resolve NameError
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -27,27 +28,32 @@ from database import (
 create_tables()
 
 app = Flask(__name__)
-app.secret_key = 'Fliph106'  # Use a secure, unique key in production
+app.secret_key = os.getenv('SECRET_KEY', 'Fliph106')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SESSION_COOKIE_SECURE'] = True  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_SECURE'] = True  # True for Render HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Use 'None' for local testing, revert to 'Lax' in production with HTTPS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_PERMANENT'] = True
-app.config['SESSION_COOKIE_DOMAIN'] = None
-app.config['SESSION_COOKIE_PATH'] = '/'  # Ensure cookie is available for all routes
+app.config['SESSION_COOKIE_PATH'] = '/'
 app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=7)
+app.config['SESSION_COOKIE_NAME'] = 'buyMoSession'
 
-# PayFast Configuration (Replace with your sandbox or live credentials)
-PAYFAST_MERCHANT_ID = "10039066"  # Sandbox merchant ID
-PAYFAST_MERCHANT_KEY = "gz01ogc2pu5bp"  # Sandbox merchant key
-PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"  # Sandbox URL
-PAYFAST_RETURN_URL = "http://localhost:5000/payfast/return"
-PAYFAST_CANCEL_URL = "http://localhost:5000/cart"
-PAYFAST_NOTIFY_URL = "http://localhost:5000/payfast/notify"
+# PayFast Configuration
+PAYFAST_MERCHANT_ID = "10039066"
+PAYFAST_MERCHANT_KEY = "gz01ogc2pu5bp"
+PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"
+PAYFAST_RETURN_URL = "https://buymo.onrender.com/payfast/return"
+PAYFAST_CANCEL_URL = "https://buymo.onrender.com/cart"
+PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
 
 @app.template_filter('zar')
 def format_zar(amount):
-    return f"R{amount:,.2f}".replace(",", " ")
+    if amount is None:
+        return "R0.00"
+    try:
+        return f"R{float(amount):,.2f}".replace(",", " ")
+    except (ValueError, TypeError):
+        return "R0.00"
 
 # Configure upload folder and allowed extensions
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -270,16 +276,18 @@ def add_product():
         category_id = request.form.get('category')
         quantity = int(request.form.get('quantity', 10))
         image = request.files.get('image')
+        image_url = 'uploads/default-product.png'  # Default image
 
         if not all([name, price, category_id]):
             flash('Name, Price, and Category are required.')
             return redirect(url_for('add_product'))
 
-        image_url = None
         if image and allowed_file(image.filename):
-            filename = secure_filename(image.filename)
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            image.save(image_path)
+            # Generate a unique filename using timestamp and user ID
+            filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.jpg")
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            image.save(file_path)
             image_url = f"uploads/{filename}"
 
         try:
@@ -289,13 +297,16 @@ def add_product():
                 INSERT INTO products 
                 (name, price, description, image, category_id, initial_quantity, remaining_quantity)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             ''', (name, float(price), description, image_url, int(category_id), quantity, quantity))
+            new_product_id = cur.fetchone()[0]
             conn.commit()
             flash('Product added successfully!')
-            return redirect(url_for('home'))
+            return redirect(url_for('product', product_id=new_product_id))
         except Exception as e:
             logger.debug(f"Error adding product: {str(e)}")
             flash('An error occurred while adding the product.')
+            conn.rollback()
         finally:
             cur.close()
             conn.close()
@@ -348,14 +359,14 @@ def cart():
     cur = conn.cursor()
     
     cur.execute('''
-        SELECT ci.id, p.name, p.price, p.image, ci.quantity 
+        SELECT ci.id, p.id, p.name, p.price, p.image, ci.quantity 
         FROM cart_items ci
         JOIN products p ON ci.product_id = p.id
         WHERE ci.user_id = %s
     ''', (current_user.id,))
     cart_items = cur.fetchall()
 
-    total_price = sum(item[2] * item[4] for item in cart_items) if cart_items else 0
+    total_price = sum(item[3] * item[5] for item in cart_items) if cart_items else 0
     
     cur.close()
     conn.close()
@@ -457,7 +468,6 @@ def payfast_return():
                 session.permanent = True
                 session['user_id'] = user.id
                 logger.debug("User re-authenticated successfully: %s", user.username)
-                flash('Payment processed. Awaiting confirmation...')
                 return redirect(url_for('home'))
         except ValueError:
             logger.debug("Invalid user_id format: %s", user_id)
@@ -627,29 +637,17 @@ def edit_product(product_id):
         categories = cur.fetchall()
         
         if request.method == 'POST':
-            image_url = product[4]  # Existing image path
-            
-            if 'image' in request.files:
-                image = request.files['image']
-                if image.filename != '' and allowed_file(image.filename):
-                    filename = secure_filename(image.filename)
-                    image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    image.save(image_path)
-                    image_url = f"uploads/{filename}"
-            
+            name = request.form['name']
+            price = float(request.form['price'])
+            description = request.form['description']
+            category_id = int(request.form['category'])
+            image_url = product[4]  # Keep existing image
+
             cur.execute('''
                 UPDATE products 
-                SET name = %s, price = %s, description = %s,
-                    image = %s, category_id = %s
+                SET name = %s, price = %s, description = %s, image = %s, category_id = %s
                 WHERE id = %s
-            ''', (
-                request.form['name'],
-                float(request.form['price']),
-                request.form['description'],
-                image_url,
-                int(request.form['category']),
-                product_id
-            ))
+            ''', (name, price, description, image_url, category_id, product_id))
             
             conn.commit()
             flash('Product updated successfully!')
@@ -677,6 +675,7 @@ def delete_product(product_id):
     try:
         cur = conn.cursor()
         cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+        cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
         cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
         conn.commit()
         flash('Product deleted successfully')
@@ -696,24 +695,20 @@ def profile():
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
-        profile_image = None
+        profile_image = user[4]  # Keep existing image if no new upload
         
         if 'profile_image' in request.files:
             file = request.files['profile_image']
             if file.filename != '' and allowed_file(file.filename):
                 filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
-                os.makedirs(app.config['UPLOAD_FOLDER_PROFILES'], exist_ok=True)
-                file.save(os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename))
+                file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                file.save(file_path)
                 profile_image = f"uploads/profiles/{filename}"
-                
-                if user[4]:  # Delete old image if exists
-                    old_path = os.path.join('static', user[4])
-                    if os.path.exists(old_path):
-                        os.remove(old_path)
-        
+                # Note: Render's ephemeral filesystem means this file may not persist across redeploys
+
         if update_user_profile(current_user.id, username, email, profile_image):
             flash('Profile updated successfully!', 'success')
-            return redirect(url_for('profile'))
         else:
             flash('Error updating profile', 'danger')
     
@@ -757,13 +752,14 @@ def change_password():
             (hashed_pw, current_user.id)
         )
         conn.commit()
+        logger.debug("Password updated successfully for user ID: %s", current_user.id)
         flash("Password updated successfully!", "success")
 
     except Exception as e:
         if conn:
             conn.rollback()
+        logger.error("Error updating password: {0}".format(str(e)))
         flash(f"Error updating password: {str(e)}", "error")
-        
     finally:
         if conn:
             conn.close()
@@ -806,41 +802,30 @@ def orders():
     conn = database.get_db_connection()
     cur = conn.cursor()
 
-    # Fetch all pending orders for the current user
+    # Fetch completed orders
     cur.execute('''
-        SELECT id, total_amount, cart_items_json, created_at
-        FROM pending_orders
-        WHERE user_id = %s
-        ORDER BY created_at DESC;
+        SELECT o.id, o.total_amount, o.order_date
+        FROM orders o
+        WHERE o.user_id = %s
+        ORDER BY o.order_date DESC;
     ''', (current_user.id,))
-    pending_orders = cur.fetchall()
-    logger.debug("Pending orders found for user_id %s: %s", current_user.id, pending_orders)
+    completed_orders = cur.fetchall()
 
     order_history = []
-    for order in pending_orders:
+    for order in completed_orders:
         order_id = order[0]
-        cart_items = json.loads(order[2])  # Parse the JSON cart items
-        order_items = []  # Renamed to avoid conflict
-        for item in cart_items:
-            # Fetch product details to get name and image
-            cur.execute('''
-                SELECT name, image
-                FROM products
-                WHERE id = %s;
-            ''', (item['product_id'],))
-            product = cur.fetchone()
-            if product:
-                order_items.append({
-                    'quantity': item['quantity'],
-                    'price_at_purchase': item['price'],
-                    'name': product[0],
-                    'image': product[1]
-                })
+        cur.execute('''
+            SELECT p.name, p.image, oi.quantity, oi.price_at_purchase
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = %s;
+        ''', (order_id,))
+        order_items = cur.fetchall()
         order_history.append({
-            'id': order[0],
-            'total_amount': order[1],
-            'created_at': order[3] if order[3] else 'Not set',
-            'order_items': order_items  # Renamed key
+            'id': order_id,
+            'total_amount': float(order[1]),  # Convert Decimal to float for template
+            'order_date': order[2],
+            'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
         })
 
     cur.close()
@@ -850,4 +835,4 @@ def orders():
     return render_template('orders.html', orders=order_history)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render

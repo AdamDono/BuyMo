@@ -32,10 +32,10 @@
     <div class="products">
         {% for product in products %}
         <div class="product-card">
-            <img src="{{ url_for('static', filename=product[4]) }}" alt="{{ product[1] }}">
+            <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}" alt="{{ product[1] }}">
             <div class="product-info">
                 <h3>{{ product[1] }}</h3>
-                <p class="price">R{{ "%.2f"|format(product[2]) }}</p>
+                <p class="price">{{ product[2] | zar }}</p>
                 
                 <!-- View Product Button (visible to all) -->
                 <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
