@@ -3,39 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <title>Log In - BuyMo</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sign.css') }}">
 </head>
-<body>
-    <header>
-        <h1>BuyMo E-Commerce Store</h1>
-        <nav>
-     
-        </nav>
-    </header>
-    <main>
-        <div class="auth-container">
-            <h2>Login</h2>
-            {% with messages = get_flashed_messages() %}
-                {% if messages %}
-                    <div class="flash-messages">
-                        {% for message in messages %}
-                            <p>{{ message }}</p>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% endwith %}
-            <form method="POST">
-                <label for="email">Email:</label>
-                <input type="email" id="email" name="email" required>
-
-                <label for="password">Password:</label>
-                <input type="password" id="password" name="password" required>
-
-                <button type="submit">Login</button>
-            </form>
-            <p>Don't have an account? <a href="{{ url_for('signup') }}">Sign up here</a>.</p>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="opus-form w-full max-w-md p-8">
+        <!-- OPUS HEADER -->
+        <div class="opus-header">
+            <h1>BuyMo</h1>
+            <h2>Shop Smarter, Live Better</h2>
         </div>
-    </main>
+        
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Centered Login Title -->
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Login</h1>
+            <p class="text-gray-600 mt-2">Welcome back! Please sign in to your account</p>
+        </div>
+        
+        <form method="POST" action="{{ url_for('login') }}" class="space-y-4">
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <input type="email" id="email" name="email" required 
+                       class="opus-input w-full px-3 py-2 focus:outline-none">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" id="password" name="password" required 
+                       class="opus-input w-full px-3 py-2 focus:outline-none">
+            </div>
+            <button type="submit" class="opus-btn w-full py-3 px-4 mt-4 text-lg">
+                Sign In →
+            </button>
+        </form>
+        
+        <div class="text-center my-6">
+            <span class="text-gray-500 text-sm">OR</span>
+        </div>
+        
+        <div class="text-center">
+            <p class="text-gray-600 text-sm">
+                Don't have an account? <a href="{{ url_for('signup') }}" class="text-custom-green hover:underline font-medium">Sign up</a>
+            </p>
+        </div>
+    </div>
 </body>
 </html>
