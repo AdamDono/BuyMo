@@ -1,0 +1,62 @@
+/* EXACT OPUS STYLES */
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background-color: #f3f4f6;
+}
+
+.opus-form {
+    background: white;
+    border-radius: 19px;
+    box-shadow: none;
+    border: 1px solid #e5e7eb;
+}
+
+.opus-input {
+    border: 1px solid #d1d5db;
+    border-radius: 15px;
+    background: white;
+}
+
+.opus-input:focus {
+    outline: none;
+    border-color: #076850;
+}
+
+.opus-btn {
+    background: #076850;
+    color: white;
+    border: none;
+    border-radius: 15px;
+    font-weight: 600;
+}
+
+.opus-btn:hover {
+    background: #076850d9;
+}
+
+.text-custom-green {
+    color: #076850;
+    font-weight: 700;
+}
+
+/* OPUS HEADER STYLES */
+.opus-header {
+    background: #076850;
+    color: white;
+    text-align: center;
+    padding: 2rem;
+    margin: -2rem -2rem 2rem -2rem;
+    border-radius: 19px 19px 0 0;
+}
+
+.opus-header h1 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.opus-header h2 {
+    font-size: 1.1rem;
+    font-weight: normal;
+    opacity: 0.9;
+}
