@@ -9,6 +9,7 @@ import requests
 from urllib.parse import urlencode
 import logging
 from datetime import timedelta
+import time  # Added to resolve NameError
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -834,5 +835,4 @@ def orders():
     return render_template('orders.html', orders=order_history)
 
 if __name__ == '__main__':
-    import time  # Added for timestamp in filename
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render
