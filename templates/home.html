@@ -1,62 +1,80 @@
 {% extends "base.html" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Home - BuyMo{% endblock %}
 
 {% block content %}
-<main>
+<main class="home-container">
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="hero-content">
+            <h1>Welcome to BuyMo</h1>
+            <p class="hero-subtitle">Discover amazing products at unbeatable prices</p>
+        </div>
+    </section>
+
     <!-- Search and Filters -->
-    <div class="search-filters">
+    <section class="search-filters">
         <form action="{{ url_for('home') }}" method="GET" class="search-form">
             <input type="text" name="query" placeholder="Search products..." value="{{ search_query }}">
             <button type="submit">Search</button>
         </form>
 
         <form action="{{ url_for('home') }}" method="GET" class="filter-form">
-            <label for="category">Category:</label>
-            <select id="category" name="category">
-                <option value="">All Categories</option>
-                {% for category in categories %}
-                    <option value="{{ category[1] }}" {% if category_filter == category[1] %}selected{% endif %}>{{ category[1] }}</option>
-                {% endfor %}
-            </select>
-
-            <label for="min_price">Min Price:</label>
-            <input type="number" id="min_price" name="min_price" step="0.01" placeholder="Min" value="{{ min_price }}">
-
-            <label for="max_price">Max Price:</label>
-            <input type="number" id="max_price" name="max_price" step="0.01" placeholder="Max" value="{{ max_price }}">
-
-            <button type="submit">Apply Filters</button>
-        </form>
-    </div>
-    <div class="products">
-        {% for product in products %}
-        <div class="product-card">
-            <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}" alt="{{ product[1] }}">
-            <div class="product-info">
-                <h3>{{ product[1] }}</h3>
-                <p class="price">{{ product[2] | zar }}</p>
-                
-                <!-- View Product Button (visible to all) -->
-                <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
-                    View Product
-                </a>
-                
-                <!-- Admin buttons (only visible to admins) -->
-                {% if current_user.is_authenticated and current_user.is_admin %}
-                <div class="admin-buttons">
-                    <a href="{{ url_for('edit_product', product_id=product[0]) }}" 
-                       class="btn-edit">Edit</a>
-                    <form action="{{ url_for('delete_product', product_id=product[0]) }}" 
-                          method="POST" 
-                          onsubmit="return confirm('Delete this product?')">
-                        <button type="submit" class="btn-delete">Delete</button>
-                    </form>
-                </div>
-                {% endif %}
+            <div class="filter-group">
+                <label for="category">Category:</label>
+                <select id="category" name="category">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                        <option value="{{ category[1] }}" {% if category_filter == category[1] %}selected{% endif %}>{{ category[1] }}</option>
+                    {% endfor %}
+                </select>
             </div>
+            
+            <div class="filter-group">
+                <label for="min_price">Min Price:</label>
+                <input type="number" id="min_price" name="min_price" step="0.01" placeholder="Min" value="{{ min_price }}">
+            </div>
+            
+            <div class="filter-group">
+                <label for="max_price">Max Price:</label>
+                <input type="number" id="max_price" name="max_price" step="0.01" placeholder="Max" value="{{ max_price }}">
+            </div>
+            
+            <button type="submit" class="filter-btn">Apply Filters</button>
+        </form>
+    </section>
+
+    <!-- Products Grid with spacing fix -->
+    <div class="spacing-fix"></div>
+    
+    <section class="products-section">
+        <h2 class="section-title">Featured Products</h2>
+        <div class="products">
+            {% for product in products %}
+            <div class="product-card">
+                <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}" alt="{{ product[1] }}">
+                <div class="product-info">
+                    <h3>{{ product[1] }}</h3>
+                    <p class="price">{{ product[2] | zar }}</p>
+                    
+                    <!-- View Product Button -->
+                    <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
+                        View Product
+                    </a>
+                    
+                    <!-- Admin buttons -->
+                    {% if current_user.is_authenticated and current_user.is_admin %}
+                    <div class="admin-buttons">
+                        <a href="{{ url_for('edit_product', product_id=product[0]) }}" class="btn-edit">Edit</a>
+                        <form action="{{ url_for('delete_product', product_id=product[0]) }}" method="POST" onsubmit="return confirm('Delete this product?')">
+                            <button type="submit" class="btn-delete">Delete</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
+    </section>
 </main>
 {% endblock %}
