@@ -97,23 +97,18 @@ def login():
         password = request.form['password']
 
         user_data = database.get_user_by_email(email)
-        logger.debug("Login attempt - Email: %s, User data: %s", email, user_data)
         if user_data:
             password_hash = user_data[3]
-            logger.debug("Stored password hash: %s", password_hash)
             if check_password_hash(password_hash, password):
                 user = User(id=user_data[0], username=user_data[1], email=user_data[2], is_admin=user_data[4])
                 login_user(user, remember=True, force=True)
                 session.permanent = True
-                logger.debug("Login successful for user: %s, Session: %s", user.username, session)
                 flash(f'Welcome back, {user.username}!', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('home'))
             else:
-                logger.debug("Password mismatch for email: %s", email)
                 flash('Invalid email or password.', 'error')
         else:
-            logger.debug("No user found for email: %s", email)
             flash('Invalid email or password.', 'error')
     return render_template('login.html')
 
@@ -127,10 +122,7 @@ def logout():
 @app.route('/home')
 @login_required
 def home():
-    logger.debug("Home route hit. Current user authenticated: %s", current_user.is_authenticated)
-    logger.debug("Session contents at home: %s", session)
     if not current_user.is_authenticated:
-        logger.debug("User not authenticated, redirecting to login")
         return redirect(url_for('login'))
 
     conn = database.get_db_connection()
@@ -259,7 +251,7 @@ def submit_review(product_id):
         conn.commit()
         flash('Review submitted successfully!', 'success')
     except Exception as e:
-        logger.debug(f"Error submitting review: {str(e)}")
+        logger.error(f"Error submitting review: {str(e)}")
         flash('An error occurred while submitting the review.', 'error')
     finally:
         cur.close()
@@ -316,7 +308,7 @@ def add_product():
             flash('Product added successfully!', 'success')
             return redirect(url_for('product', product_id=new_product_id))
         except Exception as e:
-            logger.debug(f"Error adding product: {str(e)}")
+            logger.error(f"Error adding product: {str(e)}")
             flash('An error occurred while adding the product.', 'error')
             conn.rollback()
         finally:
@@ -356,7 +348,7 @@ def add_to_cart(product_id):
         conn.commit()
         flash('Product added to cart!', 'success')
     except Exception as e:
-        logger.debug(f"Error adding to cart: {str(e)}")
+        logger.error(f"Error adding to cart: {str(e)}")
         flash('An error occurred while adding the product to the cart.', 'error')
     finally:
         cur.close()
@@ -395,7 +387,6 @@ def checkout():
     
     try:
         session['user_id'] = current_user.id
-        logger.debug("Stored user_id: %s in session", session['user_id'])
 
         cur.execute('''
             SELECT p.id, c.quantity, p.remaining_quantity, p.price
@@ -466,11 +457,7 @@ def checkout():
 
 @app.route('/payfast/return', methods=['GET'])
 def payfast_return():
-    logger.debug("PayFast return hit. Current user authenticated: %s", current_user.is_authenticated)
-    logger.debug("Session contents: %s", session)
-
     user_id = request.args.get('custom_int1')
-    logger.debug("Attempting to re-authenticate with user_id: %s", user_id)
     if user_id:
         try:
             user_data = database.get_user_by_id(int(user_id))
@@ -479,18 +466,16 @@ def payfast_return():
                 login_user(user, remember=True, force=True)
                 session.permanent = True
                 session['user_id'] = user.id
-                logger.debug("User re-authenticated successfully: %s", user.username)
                 return redirect(url_for('home'))
         except ValueError:
-            logger.debug("Invalid user_id format: %s", user_id)
+            pass
     
-    logger.debug("Authentication failed or user_id missing")
     flash('Session expired. Please log in again.')
     return redirect(url_for('login'))
 
 @app.route('/payfast/notify', methods=['POST'])
 def payfast_notify():
-    logger.debug("PayFast ITN received: %s", request.form)
+    logger.info("PayFast ITN received")
 
     if request.form.get('payment_status') == 'COMPLETE':
         pending_order_id = request.form.get('m_payment_id')
@@ -508,7 +493,7 @@ def payfast_notify():
             pending_order = cur.fetchone()
 
             if not pending_order or pending_order[0] != user_id:
-                logger.debug("Invalid order or user mismatch")
+                logger.warning("Invalid order or user mismatch")
                 return "Invalid order", 400
 
             total_amount = pending_order[1]
@@ -522,7 +507,7 @@ def payfast_notify():
                 ''', (item['product_id'],))
                 remaining = cur.fetchone()[0]
                 if remaining < item['quantity']:
-                    logger.debug(f"Not enough stock for product {item['product_id']}")
+                    logger.warning(f"Not enough stock for product {item['product_id']}")
                     return "Stock unavailable", 400
 
             cur.execute('''
@@ -556,11 +541,11 @@ def payfast_notify():
             ''', (pending_order_id,))
 
             conn.commit()
-            logger.debug("Order completed successfully")
+            logger.info("Order completed successfully")
 
         except Exception as e:
             conn.rollback()
-            logger.debug(f"Error processing ITN: {str(e)}")
+            logger.error(f"Error processing ITN: {str(e)}")
             return "Error", 500
         finally:
             conn.close()
@@ -764,7 +749,6 @@ def change_password():
             (hashed_pw, current_user.id)
         )
         conn.commit()
-        logger.debug("Password updated successfully for user ID: %s", current_user.id)
         flash("Password updated successfully!", "success")
 
     except Exception as e:
@@ -810,7 +794,6 @@ def load_user(user_id):
 @app.route('/orders')
 @login_required
 def orders():
-    logger.debug("Accessing orders route. User authenticated: %s, User ID: %s", current_user.is_authenticated, current_user.id)
     conn = database.get_db_connection()
     cur = conn.cursor()
 
@@ -843,7 +826,6 @@ def orders():
     cur.close()
     conn.close()
 
-    logger.debug("Rendering orders.html with order_history: %s", order_history)
     return render_template('orders.html', orders=order_history)
 
 if __name__ == '__main__':
