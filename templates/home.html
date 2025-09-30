@@ -78,9 +78,13 @@
                     
                     {% if current_user.is_authenticated and current_user.is_admin %}
                     <div class="admin-buttons">
-                        <a href="{{ url_for('edit_product', product_id=product[0]) }}" class="btn-edit">Edit</a>
-                        <form action="{{ url_for('delete_product', product_id=product[0]) }}" method="POST" onsubmit="return confirm('Delete this product?')">
-                            <button type="submit" class="btn-delete">Delete</button>
+                        <a href="{{ url_for('edit_product', product_id=product[0]) }}" class="btn-edit" title="Edit Product">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                        <form action="{{ url_for('delete_product', product_id=product[0]) }}" method="POST" class="delete-form" data-product-name="{{ product[1] }}">
+                            <button type="submit" class="btn-delete" title="Delete Product">
+                                <i class="fas fa-trash-alt"></i> Delete
+                            </button>
                         </form>
                     </div>
                     {% endif %}
@@ -90,15 +94,11 @@
         </div>
     </section>
 </main>
+{% endblock %}
 
-<!-- Toast Notification -->
-<div id="toast" class="toast-notification" role="alert" aria-live="polite">
-    <i class="fas fa-check-circle"></i>
-    <span id="toast-message">Added to cart!</span>
-</div>
-
+{% block extra_js %}
 <script>
-// Toast notification for quick add
+// Quick add to cart with toast
 document.addEventListener('DOMContentLoaded', function() {
     const quickAddForms = document.querySelectorAll('.quick-add-form');
     
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => {
                 if (response.ok) {
-                    showToast('Added to cart!');
+                    showToast('Added to cart!', 'success');
                 } else {
                     showToast('Error adding to cart', 'error');
                 }
@@ -124,18 +124,19 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
-});
 
-function showToast(message, type = 'success') {
-    const toast = document.getElementById('toast');
-    const toastMessage = document.getElementById('toast-message');
-    
-    toastMessage.textContent = message;
-    toast.className = 'toast-notification show ' + type;
-    
-    setTimeout(() => {
-        toast.className = 'toast-notification';
-    }, 3000);
-}
+    // Delete product confirmation with toast
+    const deleteForms = document.querySelectorAll('.delete-form');
+    deleteForms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const productName = this.dataset.productName;
+            
+            if (confirm(`Are you sure you want to delete "${productName}"?`)) {
+                this.submit();
+            }
+        });
+    });
+});
 </script>
 {% endblock %}

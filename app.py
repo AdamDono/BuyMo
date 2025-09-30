@@ -82,11 +82,11 @@ def signup():
 
         user = database.get_user_by_email(email)
         if user:
-            flash('Email already registered. Please login.')
+            flash('Email already registered. Please login.', 'warning')
             return redirect(url_for('login'))
 
         database.create_user(username, email, password)
-        flash('Registration successful! Please login.')
+        flash('Registration successful! Please login.', 'success')
         return redirect(url_for('login'))
     return render_template('signup.html')
 
@@ -110,17 +110,17 @@ def login():
                 return redirect(next_page or url_for('home'))
             else:
                 logger.debug("Password mismatch for email: %s", email)
-                flash('Invalid email or password.')
+                flash('Invalid email or password.', 'error')
         else:
             logger.debug("No user found for email: %s", email)
-            flash('Invalid email or password.')
+            flash('Invalid email or password.', 'error')
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
-    flash('You have been logged out.')
+    flash('You have been logged out.', 'success')
     return redirect(url_for('index'))
 
 @app.route('/home')
@@ -234,7 +234,7 @@ def product(product_id):
             show_quantity=current_user.is_authenticated and current_user.is_admin
         )
     else:
-        flash('Product not found.')
+        flash('Product not found.', 'error')
         return redirect(url_for('home'))
 
 @app.route('/product/<int:product_id>/review', methods=['POST'])
@@ -244,7 +244,7 @@ def submit_review(product_id):
     comment = request.form.get('comment')
 
     if not rating or not comment:
-        flash('Please provide a rating and comment.')
+        flash('Please provide a rating and comment.', 'warning')
         return redirect(url_for('product', product_id=product_id))
 
     conn = database.get_db_connection()
@@ -256,10 +256,10 @@ def submit_review(product_id):
             VALUES (%s, %s, %s, %s);
         ''', (product_id, current_user.id, int(rating), comment))
         conn.commit()
-        flash('Review submitted successfully!')
+        flash('Review submitted successfully!', 'success')
     except Exception as e:
         logger.debug(f"Error submitting review: {str(e)}")
-        flash('An error occurred while submitting the review.')
+        flash('An error occurred while submitting the review.', 'error')
     finally:
         cur.close()
         conn.close()
@@ -270,7 +270,7 @@ def submit_review(product_id):
 @login_required
 def add_product():
     if not current_user.is_admin:
-        flash('You do not have permission to access this page.')
+        flash('You do not have permission to access this page.', 'error')
         return redirect(url_for('home'))
 
     conn = database.get_db_connection()
@@ -290,7 +290,7 @@ def add_product():
         image_url = 'uploads/default-product.png'  # Default image
 
         if not all([name, price, category_id]):
-            flash('Name, Price, and Category are required.')
+            flash('Name, Price, and Category are required.', 'warning')
             return redirect(url_for('add_product'))
 
         if image and allowed_file(image.filename):
@@ -312,11 +312,11 @@ def add_product():
             ''', (name, float(price), description, image_url, int(category_id), quantity, quantity))
             new_product_id = cur.fetchone()[0]
             conn.commit()
-            flash('Product added successfully!')
+            flash('Product added successfully!', 'success')
             return redirect(url_for('product', product_id=new_product_id))
         except Exception as e:
             logger.debug(f"Error adding product: {str(e)}")
-            flash('An error occurred while adding the product.')
+            flash('An error occurred while adding the product.', 'error')
             conn.rollback()
         finally:
             cur.close()
@@ -353,10 +353,10 @@ def add_to_cart(product_id):
             ''', (current_user.id, product_id, quantity))
 
         conn.commit()
-        flash('Product added to cart!')
+        flash('Product added to cart!', 'success')
     except Exception as e:
         logger.debug(f"Error adding to cart: {str(e)}")
-        flash('An error occurred while adding the product to the cart.')
+        flash('An error occurred while adding the product to the cart.', 'error')
     finally:
         cur.close()
         conn.close()
@@ -405,12 +405,12 @@ def checkout():
         cart_items = cur.fetchall()
 
         if not cart_items:
-            flash('Your cart is empty.')
+            flash('Your cart is empty.', 'warning')
             return redirect(url_for('cart'))
 
         for item in cart_items:
             if item[2] < item[1]:
-                flash(f'Not enough stock for product ID {item[0]}')
+                flash(f'Not enough stock for product ID {item[0]}', 'error')
                 return redirect(url_for('cart'))
 
         total_price = sum(item[3] * item[1] for item in cart_items)
@@ -661,7 +661,7 @@ def edit_product(product_id):
             ''', (name, price, description, image_url, category_id, product_id))
             
             conn.commit()
-            flash('Product updated successfully!')
+            flash('Product updated successfully!', 'success')
             return redirect(url_for('product', product_id=product_id))
         
         return render_template('edit_product.html', 
@@ -689,7 +689,7 @@ def delete_product(product_id):
         cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
         cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
         conn.commit()
-        flash('Product deleted successfully')
+        flash('Product deleted successfully', 'success')
     except Exception as e:
         conn.rollback()
         flash(f'Error deleting product: {str(e)}', 'error')

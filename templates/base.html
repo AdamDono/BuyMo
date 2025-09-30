@@ -15,20 +15,53 @@
     {% include 'header.html' %}
     
     <main class="main-content" style="padding: 40px 0;">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <div class="flash-messages">
-                    {% for message in messages %}
-                        <div class="alert alert-info">{{ message }}</div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
-        
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Global Toast Notification -->
+    <div id="global-toast" class="toast-notification" role="alert" aria-live="polite">
+        <i class="fas fa-check-circle"></i>
+        <span id="global-toast-message"></span>
+    </div>
+
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+    // Global toast function
+    window.showToast = function(message, type = 'success') {
+        const toast = document.getElementById('global-toast');
+        const toastMessage = document.getElementById('global-toast-message');
+        const icon = toast.querySelector('i');
+        
+        toastMessage.textContent = message;
+        
+        // Update icon based on type
+        if (type === 'error' || type === 'danger') {
+            icon.className = 'fas fa-exclamation-circle';
+            toast.className = 'toast-notification show error';
+        } else if (type === 'warning') {
+            icon.className = 'fas fa-exclamation-triangle';
+            toast.className = 'toast-notification show warning';
+        } else {
+            icon.className = 'fas fa-check-circle';
+            toast.className = 'toast-notification show success';
+        }
+        
+        setTimeout(() => {
+            toast.className = 'toast-notification';
+        }, 3500);
+    }
+
+    // Show flash messages as toasts
+    document.addEventListener('DOMContentLoaded', function() {
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    showToast('{{ message }}', '{{ category }}');
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    });
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

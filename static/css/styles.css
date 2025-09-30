@@ -370,14 +370,18 @@ nav a {
 .btn-edit, .btn-delete {
     padding: 8px 16px;
     border: none;
-    border-radius: 6px;
+    border-radius: 10px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
     flex: 1;
     text-align: center;
     text-decoration: none;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 
 .btn-edit {
@@ -387,6 +391,7 @@ nav a {
 
 .btn-edit:hover {
     background: #0da271;
+    transform: translateY(-1px);
 }
 
 .btn-delete {
@@ -396,6 +401,11 @@ nav a {
 
 .btn-delete:hover {
     background: #dc2626;
+    transform: translateY(-1px);
+}
+
+.btn-edit i, .btn-delete i {
+    font-size: 14px;
 }
 
 .filter-group {
@@ -1370,6 +1380,10 @@ nav .welcome-text {
 
 .toast-notification.error {
     background: #ef4444;
+}
+
+.toast-notification.warning {
+    background: #f59e0b;
 }
 
 .toast-notification i {
