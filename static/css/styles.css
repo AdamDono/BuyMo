@@ -5,7 +5,45 @@ body {
     padding: 0;
     background-color: #f3f4f6;
     color: #333;
-    padding-top: 10px; /* Prevent navbar overlap */
+    padding-top: 80px; /* Prevent navbar overlap for fixed header */
+}
+
+/* Phone-first cart layout */
+@media (max-width: 576px) {
+  /* Make cart rows stack for readability */
+  .cart-table thead { display: none; }
+  .cart-table,
+  .cart-table tbody,
+  .cart-table tr,
+  .cart-table td { display: block; width: 100%; }
+  .cart-table tr { padding: 12px 12px 8px 12px; border-bottom: 1px solid var(--opus-border); }
+  .cart-table td { padding: 8px 0; border: 0; }
+
+  /* Product cell: image + name */
+  .cart-table td:nth-child(1) { display: flex; gap: 12px; align-items: center; }
+  .cart-table td:nth-child(1) .product-image { width: 64px; height: 64px; border-radius: 10px; }
+  .cart-table td:nth-child(1) span { font-weight: 600; }
+
+  /* Price row label */
+  .cart-table td:nth-child(2)::before { content: 'Price'; font-weight: 600; color: #6b7280; margin-right: 8px; }
+
+  /* Quantity controls bigger and spaced */
+  .quantity-form { gap: 10px; }
+  .quantity-input { width: 88px; height: 40px; font-size: 16px; }
+  .quantity-form .btn { padding: 10px 12px; border-radius: 12px; }
+  .quantity-form .btn i { font-size: 16px; line-height: 1; }
+
+  /* Total row label */
+  .cart-table td:nth-child(4)::before { content: 'Total'; font-weight: 600; color: #6b7280; margin-right: 8px; }
+
+  /* Actions button larger and centered inline */
+  .cart-table td:nth-child(5) { display: flex; justify-content: flex-start; }
+  .cart-table td:nth-child(5) .btn-danger.btn-sm { 
+    width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; 
+  }
+  .cart-table td:nth-child(5) .btn-danger.btn-sm i { font-size: 18px; }
+
+  .cart-summary { margin-top: 16px; }
 }
 
 .auth-container {
@@ -876,16 +914,12 @@ nav a {
 
 /* Profile Page Styles */
 .profile-container {
-    margin-top:500px;
-    margin-bottom: 300px;
-    padding-bottom: 30px;
-    padding-top: 20px;
-    padding-left: 30px;
-    padding-right: 60px;
-    width: 900px;
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px 24px;
     background: white;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    border-radius: 15px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
 }
 
 .profile-picture {
@@ -1002,26 +1036,36 @@ nav .welcome-text {
 
 .cart-container {
     max-width: 1200px;
-    margin: 30px auto;
-    padding: 20px;
+    margin: 24px auto 40px auto;
+    padding: 16px 20px;
 }
 
 .cart-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
 }
 
-.cart-table th, .cart-table td {
-    padding: 12px;
+.cart-table th,
+.cart-table td {
+    padding: 14px 16px;
     text-align: left;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid #eef2f7;
+    vertical-align: middle;
 }
 
 .cart-table th {
     background-color: #f8f9fa;
+    font-weight: 700;
 }
 
-.product-image {
+/* Limit product thumbnail size ONLY in cart contexts to avoid clobbering product page */
+.cart-table .product-image,
+.cart-item .product-image {
     width: 80px;
     height: 80px;
     object-fit: cover;
@@ -1029,17 +1073,23 @@ nav .welcome-text {
 }
 
 .quantity-input {
-    width: 60px;
-    padding: 6px;
+    width: 72px;
+    padding: 8px 10px;
     text-align: center;
+    border-radius: 10px;
 }
+
+.quantity-form { display: inline-flex; gap: 8px; align-items: center; }
 
 .cart-summary {
     background-color: #f8f9fa;
-    padding: 20px;
-    border-radius: 8px;
-    margin-top: 30px;
+    padding: 20px 24px;
+    border-radius: 12px;
+    margin-top: 24px;
+    border: 1px solid #e5e7eb;
 }
+
+.cart-summary h4 { font-weight: 800; }
 
 .empty-cart {
     text-align: center;
@@ -1081,65 +1131,27 @@ nav .welcome-text {
 
 /* MOBILE RESPONSIVE FIXES */
 @media (max-width: 768px) {
-    body {
-        padding-top: 70px;
-    }
-    
-    .search-filters {
-        margin: 1rem;
-        padding: 1.5rem;
-    }
-    
-    .search-form {
-        flex-direction: column;
-    }
-    
-    .search-form input[type="text"] {
-        min-width: auto;
-    }
-    
-    .filter-form {
-        grid-template-columns: 1fr;
-    }
-    
-    .products {
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        gap: 1.5rem;
-        padding: 1rem;
-    }
-    
-    .hero-content h1 {
-        font-size: 2rem;
-    }
-    
-    .hero-section {
-        padding: 2rem 1rem;
-        margin-top: 10px ;
-    }
-    
-    .section-title {
-        font-size: 2rem;
-    }
-    
-    /* Product details mobile fix */
-    .product-details {
-        flex-direction: column;
-        padding: 1rem;
-    }
+    body { padding-top: 70px; }
+    /* Consistent side padding on mobile across all pages */
+    .main-content { padding-left: 16px !important; padding-right: 16px !important; }
 
-    .product-image {
-        max-width: 100%;
-    }
-
-    .product-info-old {
+    .cart-container { 
+        margin: 12px auto 24px auto; 
         padding: 0;
+        border: 1px solid var(--opus-border);
+        border-radius: 12px;
     }
+    .cart-table th,
+    .cart-table td { padding: 12px; }
+    .cart-summary { 
+        padding: 16px;
+        border-top: 1px solid var(--opus-border);
+    }
+    .btn-orders { margin-top: 8px; }
 }
 
 @media (max-width: 480px) {
-    body {
-        padding-top: 1px;
-    }
+    body { padding-top: 70px; }
     
     .products {
         grid-template-columns: 1fr;
@@ -1159,10 +1171,6 @@ nav .welcome-text {
     
     .section-title {
         font-size: 1.8rem;
-    }
-    
-    .hero-section {
-
     }
     
     /* Related products mobile fix */
@@ -1186,8 +1194,118 @@ nav .welcome-text {
     .product-image {
         max-width: 100%;
     }
+}
 
-    .product-info-old {
-        padding: 0;
-    }
+/* === OPUS THEME GLOBAL OVERRIDES === */
+:root {
+    --opus-green: #076850;
+    --opus-green-hover: #076850d9;
+    --opus-border: #e5e7eb;
+    --opus-input-border: #d1d5db;
+}
+
+/* Buttons (Bootstrap + generic) */
+.btn,
+.btn-primary,
+.btn-success,
+.btn-outline-primary,
+.btn-danger,
+.btn-orders,
+.filter-btn,
+.btn-view {
+    border-radius: 15px;
+    font-weight: 600;
+}
+
+.btn-primary,
+.btn-outline-primary,
+.btn-view,
+.filter-btn,
+.btn-orders {
+    background: var(--opus-green) !important;
+    border-color: var(--opus-green) !important;
+    color: #fff !important;
+}
+
+.btn-primary:hover,
+.btn-outline-primary:hover,
+.btn-view:hover,
+.filter-btn:hover,
+.btn-orders:hover {
+    background: var(--opus-green-hover) !important;
+    border-color: var(--opus-green-hover) !important;
+}
+
+.btn-danger {
+    border-radius: 12px;
+}
+
+/* Inputs */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+select,
+textarea,
+.form-control {
+    border: 1px solid var(--opus-input-border) !important;
+    border-radius: 15px !important;
+    background: #fff;
+    box-shadow: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.form-control:focus {
+    outline: none;
+    border-color: var(--opus-green) !important;
+    box-shadow: 0 0 0 3px rgba(7, 104, 80, 0.1) !important;
+}
+
+/* Card-like containers to match .opus-form */
+.card,
+.auth-container,
+.search-filters,
+.product-card,
+.cart-summary,
+.reviews,
+.related-products,
+.profile-container {
+    border-radius: 19px;
+    border: 1px solid var(--opus-border);
+    box-shadow: none;
+}
+
+/* Tables */
+table,
+.table,
+.cart-table {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* Navbar consistency */
+.navbar-dark .navbar-brand,
+.navbar-dark .nav-link,
+nav .welcome-text {
+    font-weight: 600;
+}
+
+/* Alerts */
+.alert-info {
+    border-radius: 12px;
+}
+
+/* Headings accents */
+.section-title::after {
+    background: var(--opus-green);
+}
+
+/* Utility: mimic opus header section for page headers if used */
+.opus-section-header {
+    background: var(--opus-green);
+    color: #fff;
+    padding: 1.5rem 2rem;
+    border-radius: 19px;
 }

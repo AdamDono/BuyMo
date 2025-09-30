@@ -40,8 +40,7 @@
                                 {% if item[4] and item[4] != 'uploads/default-product.png' %}
                                     <img src="{{ url_for('static', filename=item[4]) }}" 
                                          alt="{{ item[2] }}" 
-                                         class="product-image me-3"
-                                         onerror="this.src='{{ url_for('static', filename='uploads/default-product.png') }}'">
+                                         class="product-image me-3">
                                 {% else %}
                                     <img src="{{ url_for('static', filename='uploads/default-product.png') }}" 
                                          alt="{{ item[2] }}" 
@@ -51,11 +50,10 @@
                             </div>
                         </td>
                         <td>{{ item[3]|zar }}</td>
+                        <td>
                             <form action="{{ url_for('update_cart', item_id=item[0]) }}" method="POST" class="quantity-form">
-                                <input type="number" name="quantity" 
-                                       value="{{ item[5] }}" min="1" 
-                                       class="quantity-input">
-                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <input type="number" name="quantity" value="{{ item[5] }}" min="1" class="form-control quantity-input">
+                                <button type="submit" class="btn btn-sm btn-outline-primary" aria-label="Update quantity">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
                             </form>
