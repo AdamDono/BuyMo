@@ -64,6 +64,25 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
+def calculate_profile_completion(user):
+    """Calculate profile completion percentage"""
+    completion = 0
+    total_fields = 3
+    
+    # Username (always present)
+    if user[1]:
+        completion += 1
+    
+    # Email (always present)
+    if user[2]:
+        completion += 1
+    
+    # Profile image
+    if user[4] and user[4] != 'uploads/profiles/default-profile.png':
+        completion += 1
+    
+    return int((completion / total_fields) * 100)
+
 # Routes
 @app.route('/')
 def index():
@@ -162,21 +181,24 @@ def home():
     cur.execute('SELECT * FROM categories;')
     categories = cur.fetchall()
 
-    # Fetch average ratings for all products
+    # Fetch average ratings and review counts for all products
     avg_ratings = {}
+    review_counts = {}
     for product in products:
         cur.execute('''
-            SELECT AVG(rating) FROM reviews WHERE product_id = %s
+            SELECT AVG(rating), COUNT(*) FROM reviews WHERE product_id = %s
         ''', (product[0],))
         result = cur.fetchone()
         avg_ratings[product[0]] = round(result[0], 1) if result[0] else 0
+        review_counts[product[0]] = result[1] if result[1] else 0
 
     cur.close()
     conn.close()
 
     return render_template('home.html', products=products, categories=categories, 
                          search_query=search_query, category_filter=category_filter, 
-                         min_price=min_price, max_price=max_price, avg_ratings=avg_ratings)
+                         min_price=min_price, max_price=max_price, 
+                         avg_ratings=avg_ratings, review_counts=review_counts)
 
 @app.route('/product/<int:product_id>')
 def product(product_id):
@@ -696,20 +718,23 @@ def profile():
         
         if 'profile_image' in request.files:
             file = request.files['profile_image']
-            if file.filename != '' and allowed_file(file.filename):
-                filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
+            if file and file.filename != '' and allowed_file(file.filename):
+                filename = secure_filename(f"user_{current_user.id}_{int(time.time())}.{file.filename.rsplit('.', 1)[1].lower()}")
                 file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 file.save(file_path)
                 profile_image = f"uploads/profiles/{filename}"
-                # Note: Render's ephemeral filesystem means this file may not persist across redeploys
+                logger.info(f"Profile image saved: {profile_image}")
 
         if update_user_profile(current_user.id, username, email, profile_image):
             flash('Profile updated successfully!', 'success')
         else:
-            flash('Error updating profile', 'danger')
+            flash('Error updating profile', 'error')
     
-    return render_template('profile.html', user=user)
+    # Calculate profile completion
+    completion = calculate_profile_completion(user)
+    
+    return render_template('profile.html', user=user, completion=completion)
 
 @app.route('/change-password', methods=['POST'])
 @login_required
@@ -743,12 +768,13 @@ def change_password():
 
         conn = database.get_db_connection()
         cur = conn.cursor()
-        hashed_pw = generate_password_hash(new_password)
+        hashed_pw = generate_password_hash(new_password, method='pbkdf2:sha256', salt_length=16)
         cur.execute(
             "UPDATE users SET password_hash = %s WHERE id = %s",
             (hashed_pw, current_user.id)
         )
         conn.commit()
+        cur.close()
         flash("Password updated successfully!", "success")
 
     except Exception as e:

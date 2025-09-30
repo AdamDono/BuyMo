@@ -735,10 +735,61 @@ nav a {
 .profile-container {
     max-width: 900px;
     margin: 40px auto;
-    padding: 20px 24px;
+    padding: 32px;
     background: white;
+    border-radius: 19px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.profile-container h2 {
+    color: #1f2937;
+    font-weight: 700;
+    margin-bottom: 24px;
+}
+
+.profile-container h2 i {
+    color: var(--opus-green);
+    margin-right: 8px;
+}
+
+/* Profile Completion Circle */
+.profile-completion {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
     border-radius: 15px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    margin-bottom: 30px;
+}
+
+.completion-circle {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+.completion-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--opus-green);
+}
+
+.completion-info h4 {
+    margin: 0 0 4px 0;
+    color: #1f2937;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.completion-info p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 14px;
 }
 
 .profile-picture {
@@ -751,21 +802,25 @@ nav a {
     height: 150px;
     border-radius: 50%;
     object-fit: cover;
-    border: 3px solid #f0f0f0;
+    border: 4px solid var(--opus-green);
+    box-shadow: 0 4px 12px rgba(7, 104, 80, 0.15);
 }
 
 .upload-btn {
     display: inline-block;
     margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    background: #f0f0f0;
-    border-radius: 5px;
+    padding: 10px 20px;
+    background: var(--opus-green);
+    color: white;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s;
+    font-weight: 600;
 }
 
 .upload-btn:hover {
-    background: #e0e0e0;
+    background: var(--opus-green-hover);
+    transform: translateY(-2px);
 }
 
 .upload-btn input[type="file"] {
@@ -780,37 +835,71 @@ nav a {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
+    color: #374151;
 }
 
-.form-group input {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 5px;
+.form-group label i {
+    color: var(--opus-green);
+    margin-right: 6px;
+    width: 16px;
 }
 
-.password-change {
+.member-since {
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 10px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.password-change-form {
     margin-top: 3rem;
     padding-top: 2rem;
-    border-top: 1px solid #eee;
+    border-top: 2px solid #e5e7eb;
 }
 
-.btn-save, .btn-change {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-weight: 600;
+.password-change-form h3 {
+    color: #1f2937;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+.password-change-form h3 i {
+    color: var(--opus-green);
+    margin-right: 8px;
 }
 
 .btn-save {
-    background: #007bff;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    background: var(--opus-green);
     color: white;
+    width: 100%;
+    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
-.btn-change {
-    background: #28a745;
-    color: white;
+.btn-save:hover {
+    background: var(--opus-green-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(7, 104, 80, 0.2);
+}
+
+@media (max-width: 768px) {
+    .profile-container {
+        margin: 20px 16px;
+        padding: 24px 20px;
+    }
+    .profile-completion {
+        flex-direction: column;
+        text-align: center;
+    }
 }
 
 .navbar-dark .nav-link {

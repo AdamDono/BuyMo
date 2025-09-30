@@ -64,11 +64,12 @@
                 <div class="product-info">
                     <h3>{{ product[1] }}</h3>
                     {% set rating = (avg_ratings[product[0]] if (avg_ratings is defined and product[0] in avg_ratings) else 0) %}
+                    {% set review_count = (review_counts[product[0]] if (review_counts is defined and product[0] in review_counts) else 0) %}
                     <div class="rating mb-2" aria-label="Rating: {{ rating }}/5">
                         {% for i in range(1, 6) %}
                             <i class="fa{% if i <= rating %}s{% else %}r{% endif %} fa-star"></i>
                         {% endfor %}
-                        <span class="rating-value">({{ rating }})</span>
+                        <span class="rating-value">({{ rating }}) · {{ review_count }} review{% if review_count != 1 %}s{% endif %}</span>
                     </div>
                     <p class="price mb-3">{{ product[2] | zar }}</p>
                     
