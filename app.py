@@ -106,6 +106,7 @@ def login():
                 login_user(user, remember=True, force=True)
                 session.permanent = True
                 logger.debug("Login successful for user: %s, Session: %s", user.username, session)
+                flash(f'Welcome back, {user.username}!', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('home'))
             else:
