@@ -169,10 +169,21 @@ def home():
     cur.execute('SELECT * FROM categories;')
     categories = cur.fetchall()
 
+    # Fetch average ratings for all products
+    avg_ratings = {}
+    for product in products:
+        cur.execute('''
+            SELECT AVG(rating) FROM reviews WHERE product_id = %s
+        ''', (product[0],))
+        result = cur.fetchone()
+        avg_ratings[product[0]] = round(result[0], 1) if result[0] else 0
+
     cur.close()
     conn.close()
 
-    return render_template('home.html', products=products, categories=categories, search_query=search_query, category_filter=category_filter, min_price=min_price, max_price=max_price)
+    return render_template('home.html', products=products, categories=categories, 
+                         search_query=search_query, category_filter=category_filter, 
+                         min_price=min_price, max_price=max_price, avg_ratings=avg_ratings)
 
 @app.route('/product/<int:product_id>')
 def product(product_id):

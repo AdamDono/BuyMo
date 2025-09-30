@@ -51,18 +51,31 @@
         <h2 class="section-title">Featured Products</h2>
         <div class="products">
             {% for product in products %}
-            <div class="product-card">
-                <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}" alt="{{ product[1] }}">
+            <div class="product-card product-card-enhanced">
+                <div class="product-thumb-wrap">
+                    <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}" alt="{{ product[1] }}">
+                    <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="quick-add-form">
+                        <input type="hidden" name="quantity" value="1" />
+                        <button type="submit" class="quick-add" title="Add to Cart" aria-label="Add to Cart">
+                            <i class="fas fa-cart-plus"></i>
+                        </button>
+                    </form>
+                </div>
                 <div class="product-info">
                     <h3>{{ product[1] }}</h3>
-                    <p class="price">{{ product[2] | zar }}</p>
+                    {% set rating = (avg_ratings[product[0]] if (avg_ratings is defined and product[0] in avg_ratings) else 0) %}
+                    <div class="rating mb-2" aria-label="Rating: {{ rating }}/5">
+                        {% for i in range(1, 6) %}
+                            <i class="fa{% if i <= rating %}s{% else %}r{% endif %} fa-star"></i>
+                        {% endfor %}
+                        <span class="rating-value">({{ rating }})</span>
+                    </div>
+                    <p class="price mb-3">{{ product[2] | zar }}</p>
                     
-                    <!-- View Product Button -->
                     <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
                         View Product
                     </a>
                     
-                    <!-- Admin buttons -->
                     {% if current_user.is_authenticated and current_user.is_admin %}
                     <div class="admin-buttons">
                         <a href="{{ url_for('edit_product', product_id=product[0]) }}" class="btn-edit">Edit</a>
@@ -77,4 +90,52 @@
         </div>
     </section>
 </main>
+
+<!-- Toast Notification -->
+<div id="toast" class="toast-notification" role="alert" aria-live="polite">
+    <i class="fas fa-check-circle"></i>
+    <span id="toast-message">Added to cart!</span>
+</div>
+
+<script>
+// Toast notification for quick add
+document.addEventListener('DOMContentLoaded', function() {
+    const quickAddForms = document.querySelectorAll('.quick-add-form');
+    
+    quickAddForms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    showToast('Added to cart!');
+                } else {
+                    showToast('Error adding to cart', 'error');
+                }
+            })
+            .catch(error => {
+                showToast('Error adding to cart', 'error');
+            });
+        });
+    });
+});
+
+function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toast-message');
+    
+    toastMessage.textContent = message;
+    toast.className = 'toast-notification show ' + type;
+    
+    setTimeout(() => {
+        toast.className = 'toast-notification';
+    }, 3000);
+}
+</script>
 {% endblock %}
