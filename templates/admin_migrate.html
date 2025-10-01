@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Database Migration - Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    .migrate-container {
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 32px;
+        background: white;
+        border-radius: 19px;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .migrate-header {
+        text-align: center;
+        margin-bottom: 32px;
+    }
+    
+    .migrate-header h2 {
+        color: #1f2937;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    
+    .migrate-header p {
+        color: #6b7280;
+    }
+    
+    .warning-box {
+        background: #fef3c7;
+        border: 2px solid #f59e0b;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+    
+    .warning-box h3 {
+        color: #92400e;
+        margin: 0 0 8px 0;
+        font-size: 1.1rem;
+    }
+    
+    .warning-box p {
+        color: #78350f;
+        margin: 0;
+    }
+    
+    .results-box {
+        background: #f9fafb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+    
+    .results-box h3 {
+        color: #1f2937;
+        margin: 0 0 16px 0;
+    }
+    
+    .result-item {
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        font-family: monospace;
+    }
+    
+    .result-item.success {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    
+    .result-item.exists {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+    
+    .result-item.error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    
+    .btn-migrate {
+        width: 100%;
+        padding: 16px;
+        background: var(--opus-green);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .btn-migrate:hover {
+        background: var(--opus-green-hover);
+        transform: translateY(-2px);
+    }
+    
+    .btn-migrate:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .success-message {
+        background: #d1fae5;
+        border: 2px solid #10b981;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+    
+    .success-message h3 {
+        color: #065f46;
+        margin: 0 0 8px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="migrate-container">
+    <div class="migrate-header">
+        <h2><i class="fas fa-database"></i> Database Migration</h2>
+        <p>Add delivery tracking columns to orders table</p>
+    </div>
+    
+    {% if not migrated %}
+    <div class="warning-box">
+        <h3><i class="fas fa-exclamation-triangle"></i> Important</h3>
+        <p>This will add new columns to your orders table. This is safe and won't affect existing data.</p>
+    </div>
+    
+    <form method="POST">
+        <button type="submit" class="btn-migrate">
+            <i class="fas fa-play-circle"></i> Run Migration
+        </button>
+    </form>
+    {% endif %}
+    
+    {% if results %}
+    <div class="results-box">
+        <h3>Migration Results:</h3>
+        {% for result in results %}
+            {% if '✓' in result %}
+                <div class="result-item success">{{ result }}</div>
+            {% elif '○' in result %}
+                <div class="result-item exists">{{ result }}</div>
+            {% else %}
+                <div class="result-item error">{{ result }}</div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    {% if migrated %}
+    <div class="success-message">
+        <h3><i class="fas fa-check-circle"></i> Migration Complete!</h3>
+        <p>Your database has been updated. You can now use the full order tracking features.</p>
+    </div>
+    
+    <a href="{{ url_for('admin_orders') }}" class="btn-migrate" style="display: block; text-align: center; text-decoration: none;">
+        <i class="fas fa-tasks"></i> Go to Manage Orders
+    </a>
+    {% endif %}
+</div>
+{% endblock %}

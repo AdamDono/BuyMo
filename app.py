@@ -1133,5 +1133,66 @@ def admin_update_order_status(order_id):
     
     return redirect(url_for('admin_orders'))
 
+@app.route('/admin/migrate-database', methods=['GET', 'POST'])
+@login_required
+def migrate_database():
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+    
+    if request.method == 'POST':
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        try:
+            # Add new columns to orders table
+            columns_to_add = [
+                ("delivery_method", "VARCHAR(20) DEFAULT 'delivery'"),
+                ("full_name", "VARCHAR(100)"),
+                ("phone", "VARCHAR(20)"),
+                ("street_address", "TEXT"),
+                ("suburb", "VARCHAR(100)"),
+                ("city", "VARCHAR(100)"),
+                ("province", "VARCHAR(50)"),
+                ("postal_code", "VARCHAR(10)"),
+                ("delivery_fee", "DECIMAL(10, 2) DEFAULT 50.00"),
+                ("status", "VARCHAR(50) DEFAULT 'processing'"),
+                ("status_updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+                ("pickup_date", "DATE")
+            ]
+            
+            results = []
+            for col_name, col_type in columns_to_add:
+                try:
+                    # Check if column exists
+                    cur.execute(f"""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name='orders' AND column_name='{col_name}'
+                    """)
+                    
+                    if cur.fetchone() is None:
+                        cur.execute(f"ALTER TABLE orders ADD COLUMN {col_name} {col_type}")
+                        conn.commit()
+                        results.append(f"✓ Added: {col_name}")
+                    else:
+                        results.append(f"○ Exists: {col_name}")
+                except Exception as e:
+                    conn.rollback()
+                    results.append(f"✗ Error: {col_name} - {str(e)}")
+            
+            flash(f"Migration complete! {len([r for r in results if '✓' in r])} columns added.", 'success')
+            return render_template('admin_migrate.html', results=results, migrated=True)
+            
+        except Exception as e:
+            conn.rollback()
+            flash(f"Migration failed: {str(e)}", 'error')
+            return render_template('admin_migrate.html', results=[f"Error: {str(e)}"], migrated=False)
+        finally:
+            cur.close()
+            conn.close()
+    
+    return render_template('admin_migrate.html', results=None, migrated=False)
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render
