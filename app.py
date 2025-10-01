@@ -532,16 +532,15 @@ def checkout():
             'price': float(item[3])
         } for item in cart_items])
 
+        delivery_info_json = json.dumps(delivery_info)
+        
         cur.execute('''
-            INSERT INTO pending_orders (user_id, total_amount, cart_items_json)
-            VALUES (%s, %s, %s)
+            INSERT INTO pending_orders (user_id, total_amount, cart_items_json, delivery_info_json)
+            VALUES (%s, %s, %s, %s)
             RETURNING id
-        ''', (current_user.id, total_price, cart_items_json))
+        ''', (current_user.id, total_price, cart_items_json, delivery_info_json))
         pending_order_id = cur.fetchone()[0]
         conn.commit()
-        
-        # Store delivery info in session for PayFast callback
-        session['delivery_info'] = delivery_info
 
         user_details = database.get_user_details(current_user.id)
         if not user_details:
@@ -609,7 +608,7 @@ def payfast_notify():
             cur = conn.cursor()
 
             cur.execute('''
-                SELECT user_id, total_amount, cart_items_json
+                SELECT user_id, total_amount, cart_items_json, delivery_info_json
                 FROM pending_orders
                 WHERE id = %s
             ''', (pending_order_id,))
@@ -621,6 +620,7 @@ def payfast_notify():
 
             total_amount = pending_order[1]
             cart_items = json.loads(pending_order[2])
+            delivery_info = json.loads(pending_order[3]) if pending_order[3] else {}
 
             for item in cart_items:
                 cur.execute('''
@@ -633,10 +633,7 @@ def payfast_notify():
                     logger.warning(f"Not enough stock for product {item['product_id']}")
                     return "Stock unavailable", 400
 
-            # Get delivery info from user's session (stored during checkout)
-            # Note: In production, you'd want to store this in pending_orders table
-            # For now, we'll use default values if session is lost
-            delivery_info = session.get('delivery_info', {})
+            # delivery_info already loaded from pending_orders table above
             
             cur.execute('''
                 INSERT INTO orders (
@@ -1149,6 +1146,8 @@ def migrate_database():
         cur = conn.cursor()
         
         try:
+            results = []
+            
             # Add new columns to orders table
             columns_to_add = [
                 ("delivery_method", "VARCHAR(20) DEFAULT 'delivery'"),
@@ -1164,8 +1163,6 @@ def migrate_database():
                 ("status_updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
                 ("pickup_date", "DATE")
             ]
-            
-            results = []
             for col_name, col_type in columns_to_add:
                 try:
                     # Check if column exists
