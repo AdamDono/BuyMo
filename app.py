@@ -959,8 +959,9 @@ def orders():
         ''', (current_user.id,))
         completed_orders = cur.fetchall()
     except Exception as e:
-        # If columns don't exist yet, try basic query
+        # If columns don't exist yet, rollback and try basic query
         logger.error(f"Error fetching orders: {str(e)}")
+        conn.rollback()  # IMPORTANT: Rollback the failed transaction
         cur.execute('''
             SELECT o.id, o.total_amount, o.order_date
             FROM orders o
@@ -1044,13 +1045,41 @@ def admin_orders():
     cur = conn.cursor()
     
     # Fetch all orders with user info
-    cur.execute('''
-        SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
-               u.username, u.email
-        FROM orders o
-        JOIN users u ON o.user_id = u.id
-        ORDER BY o.order_date DESC
-    ''')
+    try:
+        cur.execute('''
+            SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
+                   u.username, u.email
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            ORDER BY o.order_date DESC
+        ''')
+        all_orders = cur.fetchall()
+    except Exception as e:
+        # Fallback for old orders without status column
+        logger.error(f"Error fetching admin orders: {str(e)}")
+        conn.rollback()
+        cur.execute('''
+            SELECT o.id, o.total_amount, o.order_date, u.username, u.email
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            ORDER BY o.order_date DESC
+        ''')
+        basic_orders = cur.fetchall()
+        orders_list = []
+        for order in basic_orders:
+            orders_list.append({
+                'id': order[0],
+                'total_amount': float(order[1]),
+                'order_date': order[2],
+                'status': 'processing',
+                'delivery_method': 'delivery',
+                'customer_name': order[3],
+                'customer_email': order[4]
+            })
+        cur.close()
+        conn.close()
+        return render_template('admin_orders.html', orders=orders_list)
+    
     all_orders = cur.fetchall()
     
     orders_list = []
