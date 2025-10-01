@@ -944,7 +944,9 @@ def load_user(user_id):
 @app.route('/orders')
 @login_required
 def orders():
+    # Get a fresh connection to avoid schema cache issues
     conn = database.get_db_connection()
+    conn.set_session(autocommit=True)  # Force new transaction
     cur = conn.cursor()
 
     # Fetch completed orders with delivery info and status
@@ -1041,7 +1043,9 @@ def admin_orders():
         flash('Access denied. Admin only.', 'error')
         return redirect(url_for('home'))
     
+    # Get a fresh connection to avoid schema cache issues
     conn = database.get_db_connection()
+    conn.set_session(autocommit=True)  # Force new transaction
     cur = conn.cursor()
     
     # Fetch all orders with user info
