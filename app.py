@@ -1148,6 +1148,23 @@ def migrate_database():
         try:
             results = []
             
+            # First, add delivery_info_json to pending_orders table
+            try:
+                cur.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='pending_orders' AND column_name='delivery_info_json'
+                """)
+                if cur.fetchone() is None:
+                    cur.execute("ALTER TABLE pending_orders ADD COLUMN delivery_info_json TEXT")
+                    conn.commit()
+                    results.append("✓ Added: pending_orders.delivery_info_json")
+                else:
+                    results.append("○ Exists: pending_orders.delivery_info_json")
+            except Exception as e:
+                conn.rollback()
+                results.append(f"✗ Error: pending_orders.delivery_info_json - {str(e)}")
+            
             # Add new columns to orders table
             columns_to_add = [
                 ("delivery_method", "VARCHAR(20) DEFAULT 'delivery'"),
