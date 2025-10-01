@@ -401,12 +401,70 @@ def cart():
                          cart_items=cart_items, 
                          total_price=total_price)
 
-@app.route('/checkout', methods=['POST'])
+@app.route('/checkout', methods=['GET', 'POST'])
 @login_required
 def checkout():
     conn = database.get_db_connection()
     cur = conn.cursor()
     
+    # GET: Show checkout form
+    if request.method == 'GET':
+        cur.execute('''
+            SELECT ci.id, p.id, p.name, p.price, p.image, ci.quantity 
+            FROM cart_items ci
+            JOIN products p ON ci.product_id = p.id
+            WHERE ci.user_id = %s
+        ''', (current_user.id,))
+        cart_items = cur.fetchall()
+        
+        if not cart_items:
+            flash('Your cart is empty.', 'warning')
+            cur.close()
+            conn.close()
+            return redirect(url_for('cart'))
+        
+        subtotal = float(sum(item[3] * item[5] for item in cart_items))
+        delivery_fee = 50.00 if subtotal < 1000 else 0.00
+        
+        # Get last order for pre-filling - use a fresh connection to avoid cache
+        last_order = None
+        try:
+            # Try to get last order, but don't fail if columns don't exist yet
+            cur.execute('''
+                SELECT full_name, phone, street_address, suburb, city, province, postal_code
+                FROM orders
+                WHERE user_id = %s AND delivery_method = 'delivery'
+                ORDER BY order_date DESC
+                LIMIT 1
+            ''', (current_user.id,))
+            last_order_data = cur.fetchone()
+            if last_order_data:
+                last_order = {
+                    'full_name': last_order_data[0],
+                    'phone': last_order_data[1],
+                    'street_address': last_order_data[2],
+                    'suburb': last_order_data[3],
+                    'city': last_order_data[4],
+                    'province': last_order_data[5],
+                    'postal_code': last_order_data[6]
+                }
+        except Exception as e:
+            # If query fails (columns don't exist), just skip pre-filling
+            logger.warning(f"Could not fetch last order: {str(e)}")
+            last_order = None
+        
+        cur.close()
+        conn.close()
+        
+        from datetime import date
+        return render_template('checkout.html', 
+                             cart_items=cart_items,
+                             subtotal=subtotal,
+                             delivery_fee=delivery_fee,
+                             last_order=last_order,
+                             today=date.today().isoformat())
+    
+    # POST: Process checkout and redirect to PayFast
     try:
         session['user_id'] = current_user.id
 
@@ -427,8 +485,47 @@ def checkout():
                 flash(f'Not enough stock for product ID {item[0]}', 'error')
                 return redirect(url_for('cart'))
 
-        total_price = sum(item[3] * item[1] for item in cart_items)
+        subtotal = float(sum(item[3] * item[1] for item in cart_items))
+        
+        # Get delivery info from form
+        delivery_method = request.form.get('delivery_method', 'delivery')
+        full_name = request.form.get('full_name')
+        phone = request.form.get('phone')
+        
+        # Calculate delivery fee
+        if delivery_method == 'delivery':
+            delivery_fee = 50.00 if subtotal < 1000 else 0.00
+            street_address = request.form.get('street_address')
+            suburb = request.form.get('suburb')
+            city = request.form.get('city')
+            province = request.form.get('province')
+            postal_code = request.form.get('postal_code')
+            pickup_date = None
+        else:
+            delivery_fee = 0.00
+            street_address = None
+            suburb = None
+            city = None
+            province = None
+            postal_code = None
+            pickup_date = request.form.get('pickup_date')
+        
+        total_price = subtotal + delivery_fee
 
+        # Prepare delivery info JSON
+        delivery_info = {
+            'delivery_method': delivery_method,
+            'full_name': full_name,
+            'phone': phone,
+            'street_address': street_address,
+            'suburb': suburb,
+            'city': city,
+            'province': province,
+            'postal_code': postal_code,
+            'pickup_date': pickup_date,
+            'delivery_fee': float(delivery_fee)
+        }
+        
         cart_items_json = json.dumps([{
             'product_id': item[0],
             'quantity': item[1],
@@ -442,6 +539,9 @@ def checkout():
         ''', (current_user.id, total_price, cart_items_json))
         pending_order_id = cur.fetchone()[0]
         conn.commit()
+        
+        # Store delivery info in session for PayFast callback
+        session['delivery_info'] = delivery_info
 
         user_details = database.get_user_details(current_user.id)
         if not user_details:
@@ -488,7 +588,8 @@ def payfast_return():
                 login_user(user, remember=True, force=True)
                 session.permanent = True
                 session['user_id'] = user.id
-                return redirect(url_for('home'))
+                flash('Order placed successfully! Check your orders page for details.', 'success')
+                return redirect(url_for('orders'))
         except ValueError:
             pass
     
@@ -532,11 +633,34 @@ def payfast_notify():
                     logger.warning(f"Not enough stock for product {item['product_id']}")
                     return "Stock unavailable", 400
 
+            # Get delivery info from user's session (stored during checkout)
+            # Note: In production, you'd want to store this in pending_orders table
+            # For now, we'll use default values if session is lost
+            delivery_info = session.get('delivery_info', {})
+            
             cur.execute('''
-                INSERT INTO orders (user_id, total_amount)
-                VALUES (%s, %s)
+                INSERT INTO orders (
+                    user_id, total_amount, delivery_method, full_name, phone,
+                    street_address, suburb, city, province, postal_code,
+                    delivery_fee, pickup_date, status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            ''', (user_id, total_amount))
+            ''', (
+                user_id, 
+                total_amount,
+                delivery_info.get('delivery_method', 'delivery'),
+                delivery_info.get('full_name'),
+                delivery_info.get('phone'),
+                delivery_info.get('street_address'),
+                delivery_info.get('suburb'),
+                delivery_info.get('city'),
+                delivery_info.get('province'),
+                delivery_info.get('postal_code'),
+                delivery_info.get('delivery_fee', 0),
+                delivery_info.get('pickup_date'),
+                'processing'
+            ))
             order_id = cur.fetchone()[0]
 
             for item in cart_items:
@@ -823,14 +947,58 @@ def orders():
     conn = database.get_db_connection()
     cur = conn.cursor()
 
-    # Fetch completed orders
-    cur.execute('''
-        SELECT o.id, o.total_amount, o.order_date
-        FROM orders o
-        WHERE o.user_id = %s
-        ORDER BY o.order_date DESC;
-    ''', (current_user.id,))
-    completed_orders = cur.fetchall()
+    # Fetch completed orders with delivery info and status
+    try:
+        cur.execute('''
+            SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
+                   o.full_name, o.phone, o.street_address, o.suburb, o.city, 
+                   o.province, o.postal_code, o.delivery_fee, o.pickup_date
+            FROM orders o
+            WHERE o.user_id = %s
+            ORDER BY o.order_date DESC;
+        ''', (current_user.id,))
+        completed_orders = cur.fetchall()
+    except Exception as e:
+        # If columns don't exist yet, try basic query
+        logger.error(f"Error fetching orders: {str(e)}")
+        cur.execute('''
+            SELECT o.id, o.total_amount, o.order_date
+            FROM orders o
+            WHERE o.user_id = %s
+            ORDER BY o.order_date DESC;
+        ''', (current_user.id,))
+        basic_orders = cur.fetchall()
+        # Return basic order view with default values
+        order_history = []
+        for order in basic_orders:
+            order_id = order[0]
+            cur.execute('''
+                SELECT p.name, p.image, oi.quantity, oi.price_at_purchase
+                FROM order_items oi
+                JOIN products p ON oi.product_id = p.id
+                WHERE oi.order_id = %s;
+            ''', (order_id,))
+            order_items = cur.fetchall()
+            order_history.append({
+                'id': order_id,
+                'total_amount': float(order[1]),
+                'order_date': order[2],
+                'status': 'processing',
+                'delivery_method': 'delivery',
+                'full_name': 'N/A',
+                'phone': 'N/A',
+                'street_address': 'Address not available',
+                'suburb': '',
+                'city': '',
+                'province': '',
+                'postal_code': '',
+                'delivery_fee': 0,
+                'pickup_date': None,
+                'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
+            })
+        cur.close()
+        conn.close()
+        return render_template('orders.html', orders=order_history)
 
     order_history = []
     for order in completed_orders:
@@ -844,8 +1012,19 @@ def orders():
         order_items = cur.fetchall()
         order_history.append({
             'id': order_id,
-            'total_amount': float(order[1]),  # Convert Decimal to float for template
+            'total_amount': float(order[1]),
             'order_date': order[2],
+            'status': order[3] or 'processing',
+            'delivery_method': order[4] or 'delivery',
+            'full_name': order[5],
+            'phone': order[6],
+            'street_address': order[7],
+            'suburb': order[8],
+            'city': order[9],
+            'province': order[10],
+            'postal_code': order[11],
+            'delivery_fee': float(order[12]) if order[12] else 0,
+            'pickup_date': order[13],
             'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
         })
 
@@ -853,6 +1032,77 @@ def orders():
     conn.close()
 
     return render_template('orders.html', orders=order_history)
+
+@app.route('/admin/orders')
+@login_required
+def admin_orders():
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Fetch all orders with user info
+    cur.execute('''
+        SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
+               u.username, u.email
+        FROM orders o
+        JOIN users u ON o.user_id = u.id
+        ORDER BY o.order_date DESC
+    ''')
+    all_orders = cur.fetchall()
+    
+    orders_list = []
+    for order in all_orders:
+        orders_list.append({
+            'id': order[0],
+            'total_amount': float(order[1]),
+            'order_date': order[2],
+            'status': order[3] or 'processing',
+            'delivery_method': order[4] or 'delivery',
+            'customer_name': order[5],
+            'customer_email': order[6]
+        })
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('admin_orders.html', orders=orders_list)
+
+@app.route('/admin/order/<int:order_id>/update-status', methods=['POST'])
+@login_required
+def admin_update_order_status(order_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+    
+    new_status = request.form.get('status')
+    
+    if new_status not in ['processing', 'shipped', 'delivered']:
+        flash('Invalid status.', 'error')
+        return redirect(url_for('admin_orders'))
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute('''
+            UPDATE orders 
+            SET status = %s, status_updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (new_status, order_id))
+        conn.commit()
+        flash(f'Order #{order_id} status updated to {new_status.title()}!', 'success')
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error updating order status: {str(e)}")
+        flash('Error updating order status.', 'error')
+    finally:
+        cur.close()
+        conn.close()
+    
+    return redirect(url_for('admin_orders'))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render

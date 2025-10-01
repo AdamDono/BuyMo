@@ -125,6 +125,18 @@ def create_tables():
             user_id INTEGER NOT NULL,
             total_amount DECIMAL(10, 2) NOT NULL,
             order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            delivery_method VARCHAR(20) DEFAULT 'delivery',
+            full_name VARCHAR(100),
+            phone VARCHAR(20),
+            street_address TEXT,
+            suburb VARCHAR(100),
+            city VARCHAR(100),
+            province VARCHAR(50),
+            postal_code VARCHAR(10),
+            delivery_fee DECIMAL(10, 2) DEFAULT 50.00,
+            status VARCHAR(50) DEFAULT 'processing',
+            status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            pickup_date DATE,
             FOREIGN KEY (user_id) REFERENCES users (id)
         );
     ''')

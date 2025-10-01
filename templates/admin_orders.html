@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Orders - Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-orders-container {
+        max-width: 1400px;
+        margin: 24px auto;
+        padding: 0 16px;
+    }
+    
+    .admin-header {
+        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+        color: white;
+        padding: 32px;
+        border-radius: 19px;
+        margin-bottom: 24px;
+    }
+    
+    .admin-header h2 {
+        margin: 0 0 8px 0;
+        font-weight: 700;
+        font-size: 2rem;
+    }
+    
+    .orders-table-container {
+        background: white;
+        border-radius: 19px;
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+    }
+    
+    .orders-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .orders-table thead {
+        background: #f9fafb;
+        border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .orders-table th {
+        padding: 16px;
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        font-size: 0.9rem;
+    }
+    
+    .orders-table td {
+        padding: 16px;
+        border-bottom: 1px solid #f3f4f6;
+        color: #1f2937;
+    }
+    
+    .orders-table tr:hover {
+        background: #f9fafb;
+    }
+    
+    .status-select {
+        padding: 8px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    
+    .status-select.processing {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+    
+    .status-select.shipped {
+        background: #e9d5ff;
+        color: #6b21a8;
+    }
+    
+    .status-select.delivered {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    
+    .btn-update {
+        padding: 8px 16px;
+        background: var(--opus-green);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .btn-update:hover {
+        background: var(--opus-green-hover);
+        transform: translateY(-1px);
+    }
+    
+    .customer-info {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    
+    @media (max-width: 968px) {
+        .orders-table-container {
+            overflow-x: auto;
+        }
+        .admin-header {
+            padding: 24px 20px;
+        }
+        .admin-header h2 {
+            font-size: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-orders-container">
+    <div class="admin-header">
+        <h2><i class="fas fa-tasks"></i> Manage Orders</h2>
+        <p>View and update order statuses</p>
+    </div>
+
+    {% if orders %}
+    <div class="orders-table-container">
+        <table class="orders-table">
+            <thead>
+                <tr>
+                    <th>Order #</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>Delivery</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td><strong>#{{ order.id }}</strong></td>
+                    <td>
+                        <div>{{ order.customer_name }}</div>
+                        <div class="customer-info">{{ order.customer_email }}</div>
+                    </td>
+                    <td>{{ order.order_date.strftime('%b %d, %Y') }}</td>
+                    <td><strong>{{ order.total_amount|zar }}</strong></td>
+                    <td>
+                        {% if order.delivery_method == 'delivery' %}
+                            <span style="color: #6b7280;">
+                                <i class="fas fa-truck"></i> Delivery
+                            </span>
+                        {% else %}
+                            <span style="color: #6b7280;">
+                                <i class="fas fa-store"></i> Pickup
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin_update_order_status', order_id=order.id) }}" style="display: inline;">
+                            <select name="status" class="status-select {{ order.status }}" onchange="this.form.submit()">
+                                <option value="processing" {% if order.status == 'processing' %}selected{% endif %}>Processing</option>
+                                <option value="shipped" {% if order.status == 'shipped' %}selected{% endif %}>Shipped</option>
+                                <option value="delivered" {% if order.status == 'delivered' %}selected{% endif %}>Delivered</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        <button onclick="viewOrder({{ order.id }})" class="btn-update" style="background: #3b82f6;">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="background: white; padding: 60px 20px; border-radius: 19px; text-align: center; border: 1px solid #e5e7eb;">
+        <i class="fas fa-inbox" style="font-size: 4rem; color: #d1d5db; margin-bottom: 20px;"></i>
+        <h3>No Orders Yet</h3>
+        <p style="color: #6b7280;">Orders will appear here once customers start purchasing.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Order Details Modal (Simple Version) -->
+<div id="orderModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 19px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; padding: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <h3 style="margin: 0;">Order Details</h3>
+            <button onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div id="orderDetails"></div>
+    </div>
+</div>
+
+<script>
+function viewOrder(orderId) {
+    // In a real implementation, you'd fetch order details via AJAX
+    // For now, redirect to orders page or show a simple alert
+    window.location.href = '/orders';
+}
+
+function closeModal() {
+    document.getElementById('orderModal').style.display = 'none';
+}
+</script>
+{% endblock %}
