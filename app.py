@@ -814,14 +814,28 @@ def delete_product(product_id):
     conn = database.get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
-        cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
-        cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
-        conn.commit()
-        flash('Product deleted successfully', 'success')
+        
+        # Check if product has been ordered
+        cur.execute("SELECT COUNT(*) FROM order_items WHERE product_id = %s", (product_id,))
+        order_count = cur.fetchone()[0]
+        
+        if order_count > 0:
+            # Product has orders - mark as unavailable instead of deleting
+            cur.execute("UPDATE products SET remaining_quantity = 0 WHERE id = %s", (product_id,))
+            conn.commit()
+            flash(f'Product has {order_count} order(s). Set to out of stock instead of deleting.', 'warning')
+        else:
+            # Safe to delete - no orders
+            cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+            cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
+            cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
+            conn.commit()
+            flash('Product deleted successfully!', 'success')
+            
     except Exception as e:
         conn.rollback()
-        flash(f'Error deleting product: {str(e)}', 'error')
+        logger.error(f'Error deleting product: {str(e)}')
+        flash(f'Error: {str(e)}', 'error')
     finally:
         conn.close()
     
@@ -1032,6 +1046,44 @@ def orders():
     conn.close()
 
     return render_template('orders.html', orders=order_history)
+
+@app.route('/admin/products')
+@login_required
+def admin_products():
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Fetch all products with order count
+    cur.execute('''
+        SELECT p.id, p.name, p.price, p.remaining_quantity, p.image,
+               COUNT(DISTINCT oi.order_id) as order_count
+        FROM products p
+        LEFT JOIN order_items oi ON p.id = oi.product_id
+        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image
+        ORDER BY p.id DESC
+    ''')
+    products = cur.fetchall()
+    
+    products_list = []
+    for product in products:
+        products_list.append({
+            'id': product[0],
+            'name': product[1],
+            'price': float(product[2]),
+            'stock': product[3],
+            'image': product[4],
+            'order_count': product[5],
+            'can_delete': product[5] == 0  # Can only delete if no orders
+        })
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('admin_products.html', products=products_list)
 
 @app.route('/admin/orders')
 @login_required

@@ -11,17 +11,25 @@
     }
     
     .admin-header {
-        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+        background: linear-gradient(135deg, var(--opus-green) 0%, #065c46 100%);
         color: white;
-        padding: 32px;
+        padding: 40px;
         border-radius: 19px;
-        margin-bottom: 24px;
+        margin-bottom: 32px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(8, 145, 107, 0.15);
     }
     
     .admin-header h2 {
         margin: 0 0 8px 0;
         font-weight: 700;
-        font-size: 2rem;
+        font-size: 2.2rem;
+    }
+    
+    .admin-header p {
+        margin: 0;
+        opacity: 0.95;
+        font-size: 1rem;
     }
     
     .orders-table-container {
@@ -29,6 +37,7 @@
         border-radius: 19px;
         border: 1px solid #e5e7eb;
         overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
     
     .orders-table {
@@ -37,70 +46,139 @@
     }
     
     .orders-table thead {
-        background: #f9fafb;
-        border-bottom: 2px solid #e5e7eb;
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        border-bottom: 2px solid var(--opus-green);
     }
     
     .orders-table th {
-        padding: 16px;
+        padding: 18px 16px;
         text-align: left;
-        font-weight: 600;
-        color: #374151;
+        font-weight: 700;
+        color: #1f2937;
         font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
     .orders-table td {
-        padding: 16px;
+        padding: 18px 16px;
         border-bottom: 1px solid #f3f4f6;
+        color: #374151;
+        vertical-align: middle;
+    }
+    
+    .orders-table tbody tr {
+        transition: all 0.2s;
+    }
+    
+    .orders-table tbody tr:hover {
+        background: linear-gradient(90deg, #f0fdf4 0%, #f9fafb 100%);
+        transform: scale(1.002);
+    }
+    
+    .order-id {
+        font-weight: 700;
+        color: var(--opus-green);
+        font-size: 1.05rem;
+    }
+    
+    .customer-name {
+        font-weight: 600;
         color: #1f2937;
-    }
-    
-    .orders-table tr:hover {
-        background: #f9fafb;
-    }
-    
-    .status-select {
-        padding: 8px 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        cursor: pointer;
-    }
-    
-    .status-select.processing {
-        background: #dbeafe;
-        color: #1e40af;
-    }
-    
-    .status-select.shipped {
-        background: #e9d5ff;
-        color: #6b21a8;
-    }
-    
-    .status-select.delivered {
-        background: #d1fae5;
-        color: #065f46;
-    }
-    
-    .btn-update {
-        padding: 8px 16px;
-        background: var(--opus-green);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    
-    .btn-update:hover {
-        background: var(--opus-green-hover);
-        transform: translateY(-1px);
     }
     
     .customer-info {
         font-size: 0.85rem;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+    
+    .status-select {
+        padding: 8px 14px;
+        border: 2px solid transparent;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-select:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .status-select.processing {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        color: #1e40af;
+        border-color: #93c5fd;
+    }
+    
+    .status-select.shipped {
+        background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%);
+        color: #6b21a8;
+        border-color: #c084fc;
+    }
+    
+    .status-select.delivered {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        color: #065f46;
+        border-color: #6ee7b7;
+    }
+    
+    .btn-update {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+    }
+    
+    .btn-update:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+    
+    .delivery-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #f3f4f6;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    
+    .no-orders {
+        background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+        padding: 80px 20px;
+        border-radius: 19px;
+        text-align: center;
+        border: 2px dashed #e5e7eb;
+    }
+    
+    .no-orders i {
+        font-size: 5rem;
+        color: #d1d5db;
+        margin-bottom: 24px;
+        opacity: 0.5;
+    }
+    
+    .no-orders h3 {
+        color: #1f2937;
+        font-weight: 700;
+        margin-bottom: 12px;
+    }
+    
+    .no-orders p {
         color: #6b7280;
     }
     
@@ -109,10 +187,15 @@
             overflow-x: auto;
         }
         .admin-header {
-            padding: 24px 20px;
+            padding: 28px 20px;
         }
         .admin-header h2 {
-            font-size: 1.5rem;
+            font-size: 1.6rem;
+        }
+        .orders-table th,
+        .orders-table td {
+            padding: 12px 10px;
+            font-size: 0.85rem;
         }
     }
 </style>
@@ -142,20 +225,20 @@
             <tbody>
                 {% for order in orders %}
                 <tr>
-                    <td><strong>#{{ order.id }}</strong></td>
+                    <td><span class="order-id">#{{ order.id }}</span></td>
                     <td>
-                        <div>{{ order.customer_name }}</div>
+                        <div class="customer-name">{{ order.customer_name }}</div>
                         <div class="customer-info">{{ order.customer_email }}</div>
                     </td>
                     <td>{{ order.order_date.strftime('%b %d, %Y') }}</td>
-                    <td><strong>{{ order.total_amount|zar }}</strong></td>
+                    <td><strong style="color: #1f2937;">{{ order.total_amount|zar }}</strong></td>
                     <td>
                         {% if order.delivery_method == 'delivery' %}
-                            <span style="color: #6b7280;">
+                            <span class="delivery-badge">
                                 <i class="fas fa-truck"></i> Delivery
                             </span>
                         {% else %}
-                            <span style="color: #6b7280;">
+                            <span class="delivery-badge">
                                 <i class="fas fa-store"></i> Pickup
                             </span>
                         {% endif %}
