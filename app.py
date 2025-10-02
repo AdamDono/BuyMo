@@ -152,12 +152,28 @@ def home():
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', "").strip()
 
-    query = '''
-        SELECT p.id, p.name, p.price, p.description, p.image, c.name 
-        FROM products p
-        JOIN categories c ON p.category_id = c.id
-        WHERE COALESCE(p.is_active, true) = true
-    '''
+    # Check if is_active column exists
+    cur.execute("""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='products' AND column_name='is_active'
+    """)
+    has_is_active = cur.fetchone() is not None
+    
+    if has_is_active:
+        query = '''
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name 
+            FROM products p
+            JOIN categories c ON p.category_id = c.id
+            WHERE COALESCE(p.is_active, true) = true
+        '''
+    else:
+        query = '''
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name 
+            FROM products p
+            JOIN categories c ON p.category_id = c.id
+            WHERE 1=1
+        '''
     params = []
 
     if search_query:
