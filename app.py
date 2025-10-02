@@ -156,7 +156,7 @@ def home():
         SELECT p.id, p.name, p.price, p.description, p.image, c.name 
         FROM products p
         JOIN categories c ON p.category_id = c.id
-        WHERE 1=1
+        WHERE COALESCE(p.is_active, true) = true
     '''
     params = []
 
@@ -308,13 +308,18 @@ def add_product():
             flash('Name, Price, and Category are required.', 'warning')
             return redirect(url_for('add_product'))
 
-        if image and allowed_file(image.filename):
-            # Generate a unique filename using timestamp and user ID
-            filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.jpg")
+        if image and image.filename and allowed_file(image.filename):
+            # Generate a unique filename preserving original extension
+            ext = image.filename.rsplit('.', 1)[1].lower()
+            filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.{ext}")
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            # Ensure upload directory exists
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            
             image.save(file_path)
             image_url = f"uploads/{filename}"
+            logger.info(f"Image saved to: {file_path}")
 
         try:
             conn = database.get_db_connection()
@@ -811,26 +816,33 @@ def delete_product(product_id):
     if not current_user.is_admin:
         abort(403)
     
+    force_delete = request.form.get('force_delete') == 'true'
+    
     conn = database.get_db_connection()
     try:
         cur = conn.cursor()
         
-        # Check if product has been ordered
-        cur.execute("SELECT COUNT(*) FROM order_items WHERE product_id = %s", (product_id,))
-        order_count = cur.fetchone()[0]
-        
-        if order_count > 0:
-            # Product has orders - mark as unavailable instead of deleting
-            cur.execute("UPDATE products SET remaining_quantity = 0 WHERE id = %s", (product_id,))
-            conn.commit()
-            flash(f'Product has {order_count} order(s). Set to out of stock instead of deleting.', 'warning')
-        else:
-            # Safe to delete - no orders
+        if force_delete:
+            # Force delete - remove from order_items first, then product
             cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
             cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
+            cur.execute("DELETE FROM order_items WHERE product_id = %s", (product_id,))
             cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
             conn.commit()
-            flash('Product deleted successfully!', 'success')
+            flash('Product permanently deleted!', 'success')
+        else:
+            # Regular delete - check for orders first
+            cur.execute("SELECT COUNT(*) FROM order_items WHERE product_id = %s", (product_id,))
+            order_count = cur.fetchone()[0]
+            
+            if order_count > 0:
+                flash(f'Product has {order_count} order(s). Use "Force Delete" to remove permanently.', 'warning')
+            else:
+                cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+                cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
+                cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
+                conn.commit()
+                flash('Product deleted successfully!', 'success')
             
     except Exception as e:
         conn.rollback()
@@ -839,7 +851,47 @@ def delete_product(product_id):
     finally:
         conn.close()
     
-    return redirect(url_for('home'))
+    return redirect(url_for('admin_products'))
+
+@app.route('/toggle-product/<int:product_id>', methods=['POST'])
+@login_required
+def toggle_product(product_id):
+    if not current_user.is_admin:
+        abort(403)
+    
+    conn = database.get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Toggle is_active status
+        cur.execute("SELECT COALESCE(is_active, true) FROM products WHERE id = %s", (product_id,))
+        result = cur.fetchone()
+        
+        if result:
+            current_status = result[0]
+            new_status = not current_status
+            cur.execute("UPDATE products SET is_active = %s WHERE id = %s", (new_status, product_id))
+            conn.commit()
+            
+            status_text = 'enabled' if new_status else 'disabled'
+            flash(f'Product {status_text} successfully!', 'success')
+        else:
+            flash('Product not found.', 'error')
+            
+    except Exception as e:
+        conn.rollback()
+        logger.error(f'Error toggling product: {str(e)}')
+        # If is_active column doesn't exist, just update stock
+        try:
+            cur.execute("UPDATE products SET remaining_quantity = 0 WHERE id = %s", (product_id,))
+            conn.commit()
+            flash('Product disabled (set to out of stock).', 'success')
+        except:
+            flash(f'Error: {str(e)}', 'error')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('admin_products'))
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -1057,13 +1109,14 @@ def admin_products():
     conn = database.get_db_connection()
     cur = conn.cursor()
     
-    # Fetch all products with order count
+    # Fetch all products with order count and active status
     cur.execute('''
         SELECT p.id, p.name, p.price, p.remaining_quantity, p.image,
-               COUNT(DISTINCT oi.order_id) as order_count
+               COUNT(DISTINCT oi.order_id) as order_count,
+               COALESCE(p.is_active, true) as is_active
         FROM products p
         LEFT JOIN order_items oi ON p.id = oi.product_id
-        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image
+        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image, p.is_active
         ORDER BY p.id DESC
     ''')
     products = cur.fetchall()
@@ -1077,7 +1130,7 @@ def admin_products():
             'stock': product[3],
             'image': product[4],
             'order_count': product[5],
-            'can_delete': product[5] == 0  # Can only delete if no orders
+            'is_active': product[6] if len(product) > 6 else True
         })
     
     cur.close()
@@ -1259,6 +1312,23 @@ def migrate_database():
             except Exception as e:
                 conn.rollback()
                 results.append(f"✗ Error: pending_orders.delivery_info_json - {str(e)}")
+            
+            # Add is_active to products table
+            try:
+                cur.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='products' AND column_name='is_active'
+                """)
+                if cur.fetchone() is None:
+                    cur.execute("ALTER TABLE products ADD COLUMN is_active BOOLEAN DEFAULT true")
+                    conn.commit()
+                    results.append("✓ Added: products.is_active")
+                else:
+                    results.append("○ Exists: products.is_active")
+            except Exception as e:
+                conn.rollback()
+                results.append(f"✗ Error: products.is_active - {str(e)}")
             
             # Add new columns to orders table
             columns_to_add = [

@@ -232,9 +232,15 @@
                     </div>
                 </div>
                 
-                {% if not product.can_delete %}
+                {% if product.order_count > 0 %}
                 <div class="warning-badge">
-                    <i class="fas fa-info-circle"></i> Has orders - cannot delete
+                    <i class="fas fa-shopping-bag"></i> {{ product.order_count }} order(s)
+                </div>
+                {% endif %}
+                
+                {% if not product.is_active %}
+                <div class="warning-badge" style="background: #fee2e2; color: #991b1b;">
+                    <i class="fas fa-ban"></i> Disabled
                 </div>
                 {% endif %}
                 
@@ -242,12 +248,20 @@
                     <a href="{{ url_for('edit_product', product_id=product.id) }}" class="btn-edit">
                         <i class="fas fa-edit"></i> Edit
                     </a>
+                    
+                    <form method="POST" action="{{ url_for('toggle_product', product_id=product.id) }}" style="flex: 1;">
+                        <button type="submit" class="btn-edit" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); width: 100%;">
+                            <i class="fas fa-{% if product.is_active %}eye-slash{% else %}eye{% endif %}"></i> 
+                            {% if product.is_active %}Disable{% else %}Enable{% endif %}
+                        </button>
+                    </form>
+                    
                     <form method="POST" action="{{ url_for('delete_product', product_id=product.id) }}" 
                           style="flex: 1;" 
-                          onsubmit="return confirm('{% if product.can_delete %}Are you sure you want to delete this product?{% else %}This product has orders. It will be set to out of stock. Continue?{% endif %}')">
-                        <button type="submit" class="btn-delete" {% if not product.can_delete %}title="Will set to out of stock"{% endif %}>
-                            <i class="fas fa-{% if product.can_delete %}trash{% else %}ban{% endif %}"></i> 
-                            {% if product.can_delete %}Delete{% else %}Disable{% endif %}
+                          onsubmit="return confirm('{% if product.order_count > 0 %}⚠️ WARNING: This product has {{ product.order_count }} order(s). Deleting will remove it from order history. Are you SURE?{% else %}Delete this product permanently?{% endif %}')">
+                        <input type="hidden" name="force_delete" value="true">
+                        <button type="submit" class="btn-delete">
+                            <i class="fas fa-trash"></i> Delete
                         </button>
                     </form>
                 </div>
