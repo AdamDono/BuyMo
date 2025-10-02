@@ -1107,6 +1107,76 @@ def admin_update_order_status(order_id):
     
     return redirect(url_for('admin_orders'))
 
+@app.route('/admin/order/<int:order_id>/details')
+@login_required
+def admin_order_details(order_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Get order details
+        cur.execute('''
+            SELECT o.id, o.total_amount, o.order_date, 
+                   COALESCE(o.status, 'processing') as status,
+                   COALESCE(o.delivery_method, 'delivery') as delivery_method,
+                   o.full_name, o.phone, o.street_address, o.suburb, o.city,
+                   o.province, o.postal_code, o.delivery_fee, o.pickup_date,
+                   u.username, u.email
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.id = %s
+        ''', (order_id,))
+        order = cur.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        # Get order items
+        cur.execute('''
+            SELECT p.name, p.image, oi.quantity, oi.price_at_purchase
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        items = cur.fetchall()
+        
+        order_data = {
+            'id': order[0],
+            'total_amount': float(order[1]),
+            'order_date': order[2].strftime('%B %d, %Y at %I:%M %p'),
+            'status': order[3],
+            'delivery_method': order[4],
+            'full_name': order[5],
+            'phone': order[6],
+            'street_address': order[7],
+            'suburb': order[8],
+            'city': order[9],
+            'province': order[10],
+            'postal_code': order[11],
+            'delivery_fee': float(order[12]) if order[12] else 0,
+            'pickup_date': order[13].strftime('%B %d, %Y') if order[13] else None,
+            'customer_name': order[14],
+            'customer_email': order[15],
+            'items': [{
+                'name': item[0],
+                'image': item[1],
+                'quantity': item[2],
+                'price': float(item[3])
+            } for item in items]
+        }
+        
+        return jsonify(order_data)
+        
+    except Exception as e:
+        logger.error(f"Error fetching order details: {str(e)}")
+        return jsonify({'error': 'Failed to fetch order details'}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route('/admin/migrate-database', methods=['GET', 'POST'])
 @login_required
 def migrate_database():
