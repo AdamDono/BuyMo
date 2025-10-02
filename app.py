@@ -1040,47 +1040,20 @@ def admin_orders():
         flash('Access denied. Admin only.', 'error')
         return redirect(url_for('home'))
     
-    # Get a fresh connection to avoid schema cache issues
+    # Get a fresh connection
     conn = database.get_db_connection()
-    conn.set_session(autocommit=True)  # Force new transaction
     cur = conn.cursor()
     
-    # Fetch all orders with user info
-    try:
-        cur.execute('''
-            SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
-                   u.username, u.email
-            FROM orders o
-            JOIN users u ON o.user_id = u.id
-            ORDER BY o.order_date DESC
-        ''')
-        all_orders = cur.fetchall()
-    except Exception as e:
-        # Fallback for old orders without status column
-        logger.error(f"Error fetching admin orders: {str(e)}")
-        conn.rollback()
-        cur.execute('''
-            SELECT o.id, o.total_amount, o.order_date, u.username, u.email
-            FROM orders o
-            JOIN users u ON o.user_id = u.id
-            ORDER BY o.order_date DESC
-        ''')
-        basic_orders = cur.fetchall()
-        orders_list = []
-        for order in basic_orders:
-            orders_list.append({
-                'id': order[0],
-                'total_amount': float(order[1]),
-                'order_date': order[2],
-                'status': 'processing',
-                'delivery_method': 'delivery',
-                'customer_name': order[3],
-                'customer_email': order[4]
-            })
-        cur.close()
-        conn.close()
-        return render_template('admin_orders.html', orders=orders_list)
-    
+    # Fetch all orders with user info - use simple query that works
+    cur.execute('''
+        SELECT o.id, o.total_amount, o.order_date, 
+               COALESCE(o.status, 'processing') as status,
+               COALESCE(o.delivery_method, 'delivery') as delivery_method,
+               u.username, u.email
+        FROM orders o
+        JOIN users u ON o.user_id = u.id
+        ORDER BY o.order_date DESC
+    ''')
     all_orders = cur.fetchall()
     
     orders_list = []
