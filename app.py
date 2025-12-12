@@ -875,38 +875,8 @@ def toggle_product(product_id):
     if not current_user.is_admin:
         abort(403)
     
-    conn = database.get_db_connection()
-    try:
-        cur = conn.cursor()
-        
-        # Toggle is_active status
-        cur.execute("SELECT COALESCE(is_active, true) FROM products WHERE id = %s", (product_id,))
-        result = cur.fetchone()
-        
-        if result:
-            current_status = result[0]
-            new_status = not current_status
-            cur.execute("UPDATE products SET is_active = %s WHERE id = %s", (new_status, product_id))
-            conn.commit()
-            
-            status_text = 'enabled' if new_status else 'disabled'
-            flash(f'Product {status_text} successfully!', 'success')
-        else:
-            flash('Product not found.', 'error')
-            
-    except Exception as e:
-        conn.rollback()
-        logger.error(f'Error toggling product: {str(e)}')
-        # If is_active column doesn't exist, just update stock
-        try:
-            cur.execute("UPDATE products SET remaining_quantity = 0 WHERE id = %s", (product_id,))
-            conn.commit()
-            flash('Product disabled (set to out of stock).', 'success')
-        except:
-            flash(f'Error: {str(e)}', 'error')
-    finally:
-        conn.close()
-    
+    # Toggle functionality disabled - is_active column doesn't exist in current schema
+    flash('Product toggle feature temporarily disabled.', 'info')
     return redirect(url_for('admin_products'))
 
 @app.route('/profile', methods=['GET', 'POST'])
@@ -1129,10 +1099,10 @@ def admin_products():
     cur.execute('''
         SELECT p.id, p.name, p.price, p.remaining_quantity, p.image,
                COUNT(DISTINCT oi.order_id) as order_count,
-               COALESCE(p.is_active, true) as is_active
+               true as is_active
         FROM products p
         LEFT JOIN order_items oi ON p.id = oi.product_id
-        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image, p.is_active
+        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image
         ORDER BY p.id DESC
     ''')
     products = cur.fetchall()
