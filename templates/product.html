@@ -3,168 +3,264 @@
 {% block title %}{{ product[1] }} - BuyMo{% endblock %}
 
 {% block extra_css %}
-  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.css"/>
-  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick-theme.css"/>
-  <style>
-    .product-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-    .product-main { display: flex; gap: 40px; margin: 30px 0; }
-    .product-image { flex: 1; max-width: 560px; border-radius: 12px; overflow: visible; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
-    .product-image img { width: 100%; height: auto; display: block; }
-    .product-info { flex: 1; }
-    .product-title { font-size: 28px; margin-bottom: 12px; color: #1f2937; }
-    .product-price { font-size: 24px; color: #076850; font-weight: 700; margin-bottom: 16px; }
-    .product-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
-    .quantity-input { width: 80px; padding: 10px; }
-    .reviews-container { margin-top: 30px; }
-    .review-card { background: #fff; padding: 16px; border-radius: 10px; border: 1px solid #e5e7eb; margin-bottom: 16px; }
-    .related-products { margin-top: 30px; }
-    .related-product-card { padding: 12px; text-align: center; }
-    .related-product-card img { max-width: 100%; height: 180px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto; }
-    @media (max-width: 768px) {
-      .product-container { padding: 0; }
-      .product-main { flex-direction: column; gap: 20px; }
-      /* Make image full-bleed while keeping page side padding elsewhere */
-      .product-image { width: 100vw; max-width: 100vw; border-radius: 0; margin-left: 50%; transform: translateX(-50%); }
-      .product-image img { width: 100vw; height: auto; display: block; }
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.css" />
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick-theme.css" />
+<style>
+  .product-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .product-main {
+    display: flex;
+    gap: 40px;
+    margin: 30px 0;
+  }
+
+  .product-image {
+    flex: 1;
+    max-width: 560px;
+    border-radius: 12px;
+    overflow: visible;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+  }
+
+  .product-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .product-info {
+    flex: 1;
+  }
+
+  .product-title {
+    font-size: 28px;
+    margin-bottom: 12px;
+    color: #1f2937;
+  }
+
+  .product-price {
+    font-size: 24px;
+    color: #076850;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+
+  .product-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .quantity-input {
+    width: 80px;
+    padding: 10px;
+  }
+
+  .reviews-container {
+    margin-top: 30px;
+  }
+
+  .review-card {
+    background: #fff;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 16px;
+  }
+
+  .related-products {
+    margin-top: 30px;
+  }
+
+  .related-product-card {
+    padding: 12px;
+    text-align: center;
+  }
+
+  .related-product-card img {
+    max-width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  @media (max-width: 768px) {
+    .product-container {
+      padding: 0;
     }
-    @media (max-width: 480px) {
-      .product-image img { width: 100%; height: 360px; object-fit: contain; }
+
+    .product-main {
+      flex-direction: column;
+      gap: 20px;
     }
-  </style>
+
+    /* Make image full-bleed while keeping page side padding elsewhere */
+    .product-image {
+      width: 100vw;
+      max-width: 100vw;
+      border-radius: 0;
+      margin-left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .product-image img {
+      width: 100vw;
+      height: auto;
+      display: block;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .product-image img {
+      width: 100%;
+      height: 360px;
+      object-fit: contain;
+    }
+  }
+</style>
 {% endblock %}
 
 {% block content %}
-  <div class="product-container">
-    <div class="product-main">
-      <div class="product-image">
-        <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}"
-             alt="{{ product[1] }}">
-      </div>
-      <div class="product-info">
-        <h1 class="product-title">{{ product[1] }}</h1>
-        <div class="product-price">{{ product[2] | zar }}</div>
-
-        {% if current_user.is_admin %}
-          <div class="admin-stock">Stock: {{ product[5] }}/{{ product[6] }}</div>
-        {% else %}
-          <div class="customer-availability">
-            {% if product[5] > 10 %}
-              <span class="in-stock">Available</span>
-            {% elif product[5] > 0 %}
-              <span class="low-stock">Selling Fast!</span>
-            {% else %}
-              <span class="out-of-stock">Out of Stock</span>
-            {% endif %}
-          </div>
-        {% endif %}
-
-        <div class="product-meta">
-          <p><strong>Category:</strong> {{ product[8] }}</p>
-          <div class="product-rating">
-            {% for i in range(1, 5 + 1) %}
-              <i class="fas fa-star{% if i > avg_rating %}-o{% endif %}"></i>
-            {% endfor %}
-            <span>({{ reviews|length }} reviews)</span>
-          </div>
-        </div>
-
-        <p class="description">{{ product[3] }}</p>
-
-        <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="product-actions">
-          <input type="number" id="quantity" name="quantity" class="form-control quantity-input" value="1" min="1" max="{{ product[5] if product[5] else 10 }}">
-          <button type="submit" class="btn btn-primary">
-            <i class="fas fa-cart-plus"></i> Add to Cart
-          </button>
-          <button type="button" class="btn btn-success">
-            <i class="fas fa-heart"></i> Wishlist
-          </button>
-        </form>
-      </div>
+<div class="product-container">
+  <div class="product-main">
+    <div class="product-image">
+      <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}">
     </div>
+    <div class="product-info">
+      <h1 class="product-title">{{ product[1] }}</h1>
+      <div class="product-price">{{ product[2] | zar }}</div>
 
-    <div class="reviews-container">
-      <h2 class="section-title"><i class="fas fa-star"></i> Customer Reviews</h2>
-      {% if current_user.is_authenticated %}
-        <div class="review-form-container mb-4">
-          <h3>Write a Review</h3>
-          <form method="POST" action="{{ url_for('submit_review', product_id=product[0]) }}" class="review-form">
-            <div class="mb-3">
-              <label for="rating" class="form-label">Rating</label>
-              <select id="rating" name="rating" class="form-select" required>
-                <option value="">Select rating</option>
-                {% for i in range(1,6) %}
-                  <option value="{{ i }}">{{ i }} Star{% if i > 1 %}s{% endif %}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="mb-3">
-              <label for="comment" class="form-label">Your Review</label>
-              <textarea id="comment" name="comment" class="form-control" rows="4" required></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary">Submit Review</button>
-          </form>
-        </div>
+      {% if current_user.is_admin %}
+      <div class="admin-stock">Stock: {{ product[5] }}/{{ product[6] }}</div>
       {% else %}
-        <div class="alert alert-info">Please <a href="{{ url_for('login') }}" class="alert-link">log in</a> to leave a review.</div>
+      <div class="customer-availability">
+        {% if product[5] > 10 %}
+        <span class="in-stock">Available</span>
+        {% elif product[5] > 0 %}
+        <span class="low-stock">Selling Fast!</span>
+        {% else %}
+        <span class="out-of-stock">Out of Stock</span>
+        {% endif %}
+      </div>
       {% endif %}
 
-      <div class="reviews-list">
-        {% for review in reviews %}
-          <div class="review-card">
-            <div class="d-flex justify-content-between mb-2">
-              <div>
-                <strong>{{ review[2] }}</strong>
-                <span class="review-rating">
-                  {% for i in range(1, 5 + 1) %}
-                    <i class="fas fa-star{% if i > review[0] %}-o{% endif %}"></i>
-                  {% endfor %}
-                </span>
-              </div>
-              <span class="review-date">{{ review[3].strftime('%B %d, %Y') }}</span>
-            </div>
-            <p class="review-comment">{{ review[1] }}</p>
-          </div>
-        {% else %}
-          <div class="alert alert-secondary">No reviews yet. Be the first to review this product!</div>
-        {% endfor %}
+      <div class="product-meta">
+        <p><strong>Category:</strong> {{ product[8] }}</p>
+        <div class="product-rating">
+          {% for i in range(1, 5 + 1) %}
+          <i class="fas fa-star{% if i > avg_rating %}-o{% endif %}"></i>
+          {% endfor %}
+          <span>({{ reviews|length }} reviews)</span>
+        </div>
       </div>
-    </div>
 
-    <div class="related-products">
-      <h2 class="section-title">Related Products</h2>
-      <div class="related-products-grid">
-        {% for related_product in related_products %}
-          <div class="related-product-card">
-            <a href="{{ url_for('product', product_id=related_product[0]) }}" class="text-decoration-none">
-              <img src="{{ url_for('static', filename=related_product[4] if related_product[4] else 'uploads/default-product.png') }}"
-                   alt="{{ related_product[1] }}">
-              <h4 class="related-product-title">{{ related_product[1] }}</h4>
-              <p class="related-product-price">{{ related_product[2] | zar }}</p>
-            </a>
-          </div>
-        {% endfor %}
-      </div>
+      <p class="description">{{ product[3] }}</p>
+
+      <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="product-actions">
+        <input type="number" id="quantity" name="quantity" class="form-control quantity-input" value="1" min="1"
+          max="{{ product[5] if product[5] else 10 }}">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-cart-plus"></i> Add to Cart
+        </button>
+        <button type="button" class="btn btn-success">
+          <i class="fas fa-heart"></i> Wishlist
+        </button>
+      </form>
     </div>
   </div>
+
+  <div class="reviews-container">
+    <h2 class="section-title"><i class="fas fa-star"></i> Customer Reviews</h2>
+    {% if current_user.is_authenticated %}
+    <div class="review-form-container mb-4">
+      <h3>Write a Review</h3>
+      <form method="POST" action="{{ url_for('submit_review', product_id=product[0]) }}" class="review-form">
+        <div class="mb-3">
+          <label for="rating" class="form-label">Rating</label>
+          <select id="rating" name="rating" class="form-select" required>
+            <option value="">Select rating</option>
+            {% for i in range(1,6) %}
+            <option value="{{ i }}">{{ i }} Star{% if i > 1 %}s{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="comment" class="form-label">Your Review</label>
+          <textarea id="comment" name="comment" class="form-control" rows="4" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Submit Review</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="alert alert-info">Please <a href="{{ url_for('login') }}" class="alert-link">log in</a> to leave a
+      review.</div>
+    {% endif %}
+
+    <div class="reviews-list">
+      {% for review in reviews %}
+      <div class="review-card">
+        <div class="d-flex justify-content-between mb-2">
+          <div>
+            <strong>{{ review[2] }}</strong>
+            <span class="review-rating">
+              {% for i in range(1, 5 + 1) %}
+              <i class="fas fa-star{% if i > review[0] %}-o{% endif %}"></i>
+              {% endfor %}
+            </span>
+          </div>
+          <span class="review-date">{{ review[3].strftime('%B %d, %Y') }}</span>
+        </div>
+        <p class="review-comment">{{ review[1] }}</p>
+      </div>
+      {% else %}
+      <div class="alert alert-secondary">No reviews yet. Be the first to review this product!</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="related-products">
+    <h2 class="section-title">Related Products</h2>
+    <div class="related-products-grid">
+      {% for related_product in related_products %}
+      <div class="related-product-card">
+        <a href="{{ url_for('product', product_id=related_product[0]) }}" class="text-decoration-none">
+          <img src="{{ related_product[4] | resolve_image }}" alt="{{ related_product[1] }}">
+          <h4 class="related-product-title">{{ related_product[1] }}</h4>
+          <p class="related-product-price">{{ related_product[2] | zar }}</p>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.min.js"></script>
-  <script>
-    $(function(){
-      $('.related-products-grid').slick({
-        dots: true,
-        infinite: true,
-        speed: 300,
-        slidesToShow: 4,
-        slidesToScroll: 1,
-        responsive: [
-          { breakpoint: 992, settings: { slidesToShow: 3, slidesToScroll: 1 } },
-          { breakpoint: 768, settings: { slidesToShow: 2, slidesToScroll: 1 } },
-          { breakpoint: 576, settings: { slidesToShow: 1, slidesToScroll: 1 } }
-        ]
-      });
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.min.js"></script>
+<script>
+  $(function () {
+    $('.related-products-grid').slick({
+      dots: true,
+      infinite: true,
+      speed: 300,
+      slidesToShow: 4,
+      slidesToScroll: 1,
+      responsive: [
+        { breakpoint: 992, settings: { slidesToShow: 3, slidesToScroll: 1 } },
+        { breakpoint: 768, settings: { slidesToShow: 2, slidesToScroll: 1 } },
+        { breakpoint: 576, settings: { slidesToShow: 1, slidesToScroll: 1 } }
+      ]
     });
-  </script>
+  });
+</script>
 {% endblock %}

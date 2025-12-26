@@ -9,7 +9,7 @@
         margin: 24px auto;
         padding: 0 16px;
     }
-    
+
     .admin-header {
         background: linear-gradient(135deg, var(--opus-green) 0%, #065c46 100%);
         color: white;
@@ -19,18 +19,18 @@
         text-align: center;
         box-shadow: 0 4px 12px rgba(8, 145, 107, 0.15);
     }
-    
+
     .admin-header h2 {
         margin: 0 0 8px 0;
         font-weight: 700;
         font-size: 2.2rem;
     }
-    
+
     .admin-header p {
         margin: 0;
         opacity: 0.95;
     }
-    
+
     .btn-add-product {
         display: inline-block;
         margin-top: 20px;
@@ -41,60 +41,60 @@
         font-weight: 700;
         text-decoration: none;
         transition: all 0.3s;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
-    
+
     .btn-add-product:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
         color: var(--opus-green);
     }
-    
+
     .products-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
         gap: 24px;
     }
-    
+
     .product-card {
         background: white;
         border-radius: 19px;
         border: 1px solid #e5e7eb;
         overflow: hidden;
         transition: all 0.3s;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
-    
+
     .product-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
     }
-    
+
     .product-image {
         width: 100%;
         height: 200px;
         object-fit: cover;
         background: #f3f4f6;
     }
-    
+
     .product-info {
         padding: 20px;
     }
-    
+
     .product-name {
         font-weight: 700;
         font-size: 1.1rem;
         color: #1f2937;
         margin-bottom: 8px;
     }
-    
+
     .product-price {
         font-size: 1.3rem;
         font-weight: 700;
         color: var(--opus-green);
         margin-bottom: 12px;
     }
-    
+
     .product-meta {
         display: flex;
         justify-content: space-between;
@@ -103,37 +103,37 @@
         background: #f9fafb;
         border-radius: 8px;
     }
-    
+
     .meta-item {
         text-align: center;
     }
-    
+
     .meta-label {
         font-size: 0.75rem;
         color: #6b7280;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    
+
     .meta-value {
         font-size: 1.1rem;
         font-weight: 700;
         color: #1f2937;
     }
-    
+
     .meta-value.low-stock {
         color: #dc2626;
     }
-    
+
     .meta-value.out-of-stock {
         color: #991b1b;
     }
-    
+
     .product-actions {
         display: flex;
         gap: 8px;
     }
-    
+
     .btn-edit {
         flex: 1;
         padding: 10px;
@@ -148,13 +148,13 @@
         display: inline-block;
         text-align: center;
     }
-    
+
     .btn-edit:hover {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
         transform: translateY(-2px);
         color: white;
     }
-    
+
     .btn-delete {
         flex: 1;
         padding: 10px;
@@ -166,18 +166,18 @@
         cursor: pointer;
         transition: all 0.3s;
     }
-    
+
     .btn-delete:hover {
         background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
         transform: translateY(-2px);
     }
-    
+
     .btn-delete:disabled {
         background: #9ca3af;
         cursor: not-allowed;
         transform: none;
     }
-    
+
     .warning-badge {
         display: inline-block;
         padding: 4px 12px;
@@ -188,7 +188,7 @@
         font-weight: 600;
         margin-top: 8px;
     }
-    
+
     @media (max-width: 768px) {
         .products-grid {
             grid-template-columns: 1fr;
@@ -211,18 +211,17 @@
     <div class="products-grid">
         {% for product in products %}
         <div class="product-card">
-            <img src="{{ url_for('static', filename=product.image if product.image else 'uploads/default-product.png') }}" 
-                 alt="{{ product.name }}" 
-                 class="product-image">
-            
+            <img src="{{ product.image | resolve_image }}" alt="{{ product.name }}" class="product-image">
+
             <div class="product-info">
                 <div class="product-name">{{ product.name }}</div>
                 <div class="product-price">{{ product.price|zar }}</div>
-                
+
                 <div class="product-meta">
                     <div class="meta-item">
                         <div class="meta-label">Stock</div>
-                        <div class="meta-value {% if product.stock == 0 %}out-of-stock{% elif product.stock < 10 %}low-stock{% endif %}">
+                        <div
+                            class="meta-value {% if product.stock == 0 %}out-of-stock{% elif product.stock < 10 %}low-stock{% endif %}">
                             {{ product.stock }}
                         </div>
                     </div>
@@ -231,34 +230,35 @@
                         <div class="meta-value">{{ product.order_count }}</div>
                     </div>
                 </div>
-                
+
                 {% if product.order_count > 0 %}
                 <div class="warning-badge">
                     <i class="fas fa-shopping-bag"></i> {{ product.order_count }} order(s)
                 </div>
                 {% endif %}
-                
+
                 {% if not product.is_active %}
                 <div class="warning-badge" style="background: #fee2e2; color: #991b1b;">
                     <i class="fas fa-ban"></i> Disabled
                 </div>
                 {% endif %}
-                
+
                 <div class="product-actions">
                     <a href="{{ url_for('edit_product', product_id=product.id) }}" class="btn-edit">
                         <i class="fas fa-edit"></i> Edit
                     </a>
-                    
-                    <form method="POST" action="{{ url_for('toggle_product', product_id=product.id) }}" style="flex: 1;">
-                        <button type="submit" class="btn-edit" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); width: 100%;">
-                            <i class="fas fa-{% if product.is_active %}eye-slash{% else %}eye{% endif %}"></i> 
+
+                    <form method="POST" action="{{ url_for('toggle_product', product_id=product.id) }}"
+                        style="flex: 1;">
+                        <button type="submit" class="btn-edit"
+                            style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); width: 100%;">
+                            <i class="fas fa-{% if product.is_active %}eye-slash{% else %}eye{% endif %}"></i>
                             {% if product.is_active %}Disable{% else %}Enable{% endif %}
                         </button>
                     </form>
-                    
-                    <form method="POST" action="{{ url_for('delete_product', product_id=product.id) }}" 
-                          style="flex: 1;" 
-                          onsubmit="return confirm('{% if product.order_count > 0 %}⚠️ WARNING: This product has {{ product.order_count }} order(s). Deleting will remove it from order history. Are you SURE?{% else %}Delete this product permanently?{% endif %}')">
+
+                    <form method="POST" action="{{ url_for('delete_product', product_id=product.id) }}" style="flex: 1;"
+                        onsubmit="return confirm('{% if product.order_count > 0 %}⚠️ WARNING: This product has {{ product.order_count }} order(s). Deleting will remove it from order history. Are you SURE?{% else %}Delete this product permanently?{% endif %}')">
                         <input type="hidden" name="force_delete" value="true">
                         <button type="submit" class="btn-delete">
                             <i class="fas fa-trash"></i> Delete
@@ -270,7 +270,8 @@
         {% endfor %}
     </div>
     {% else %}
-    <div style="background: white; padding: 80px 20px; border-radius: 19px; text-align: center; border: 2px dashed #e5e7eb;">
+    <div
+        style="background: white; padding: 80px 20px; border-radius: 19px; text-align: center; border: 2px dashed #e5e7eb;">
         <i class="fas fa-box-open" style="font-size: 5rem; color: #d1d5db; margin-bottom: 24px; opacity: 0.5;"></i>
         <h3 style="color: #1f2937; font-weight: 700; margin-bottom: 12px;">No Products Yet</h3>
         <p style="color: #6b7280; margin-bottom: 24px;">Start by adding your first product to the store.</p>

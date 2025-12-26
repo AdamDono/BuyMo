@@ -9,7 +9,9 @@ import requests
 from urllib.parse import urlencode
 import logging
 from datetime import timedelta
-import time  # Added to resolve NameError
+import time
+import cloudinary
+import cloudinary.uploader
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -54,6 +56,14 @@ def format_zar(amount):
         return f"R{float(amount):,.2f}".replace(",", " ")
     except (ValueError, TypeError):
         return "R0.00"
+
+@app.template_filter('resolve_image')
+def resolve_image(image_path):
+    if not image_path:
+        return url_for('static', filename='uploads/default-product.png')
+    if image_path.startswith('http') or image_path.startswith('https'):
+        return image_path
+    return url_for('static', filename=image_path)
 
 # Configure upload folder and allowed extensions
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -325,17 +335,40 @@ def add_product():
             return redirect(url_for('add_product'))
 
         if image and image.filename and allowed_file(image.filename):
-            # Generate a unique filename preserving original extension
-            ext = image.filename.rsplit('.', 1)[1].lower()
-            filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.{ext}")
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            # Ensure upload directory exists
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            
-            image.save(file_path)
-            image_url = f"uploads/{filename}"
-            logger.info(f"Image saved to: {file_path}")
+            if os.getenv('CLOUDINARY_CLOUD_NAME'):
+                try:
+                    cloudinary.config(
+                        cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
+                        api_key = os.getenv('CLOUDINARY_API_KEY'),
+                        api_secret = os.getenv('CLOUDINARY_API_SECRET')
+                    )
+                    upload_result = cloudinary.uploader.upload(image)
+                    image_url = upload_result['secure_url']
+                    logger.info(f"Image uploaded to Cloudinary: {image_url}")
+                except Exception as e:
+                    logger.error(f"Cloudinary upload failed: {str(e)}")
+                    # Fallback to local if Cloudinary fails? Or just fail?
+                    # Let's try to fallback or just warn.
+                    flash('Cloudinary upload failed, falling back to local storage (ephemeral).', 'warning')
+                    ext = image.filename.rsplit('.', 1)[1].lower()
+                    filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.{ext}")
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                    image.save(file_path)
+                    image_url = f"uploads/{filename}"
+            else:
+                # Generate a unique filename preserving original extension
+                ext = image.filename.rsplit('.', 1)[1].lower()
+                filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.{ext}")
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                # Ensure upload directory exists
+                os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                
+                image.save(file_path)
+                image_url = f"uploads/{filename}"
+                logger.info(f"Image saved to: {file_path}")
+
 
         try:
             conn = database.get_db_connection()
@@ -892,12 +925,32 @@ def profile():
         if 'profile_image' in request.files:
             file = request.files['profile_image']
             if file and file.filename != '' and allowed_file(file.filename):
-                filename = secure_filename(f"user_{current_user.id}_{int(time.time())}.{file.filename.rsplit('.', 1)[1].lower()}")
-                file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                file.save(file_path)
-                profile_image = f"uploads/profiles/{filename}"
-                logger.info(f"Profile image saved: {profile_image}")
+                if os.getenv('CLOUDINARY_CLOUD_NAME'):
+                    try:
+                        cloudinary.config(
+                            cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
+                            api_key = os.getenv('CLOUDINARY_API_KEY'),
+                            api_secret = os.getenv('CLOUDINARY_API_SECRET')
+                        )
+                        upload_result = cloudinary.uploader.upload(file)
+                        profile_image = upload_result['secure_url']
+                        logger.info(f"Profile image uploaded to Cloudinary: {profile_image}")
+                    except Exception as e:
+                        logger.error(f"Cloudinary upload failed: {str(e)}")
+                        flash('Image upload failed. Using local storage.', 'warning')
+                        filename = secure_filename(f"user_{current_user.id}_{int(time.time())}.{file.filename.rsplit('.', 1)[1].lower()}")
+                        file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
+                        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                        file.save(file_path)
+                        profile_image = f"uploads/profiles/{filename}"
+                else:
+                    filename = secure_filename(f"user_{current_user.id}_{int(time.time())}.{file.filename.rsplit('.', 1)[1].lower()}")
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    file.save(file_path)
+                    profile_image = f"uploads/profiles/{filename}"
+                    logger.info(f"Profile image saved: {profile_image}")
+
 
         if update_user_profile(current_user.id, username, email, profile_image):
             flash('Profile updated successfully!', 'success')

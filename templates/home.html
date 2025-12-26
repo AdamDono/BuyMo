@@ -53,7 +53,7 @@
             {% for product in products %}
             <div class="product-card product-card-enhanced">
                 <div class="product-thumb-wrap">
-                    <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}" alt="{{ product[1] }}">
+                    <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}">
                     <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="quick-add-form">
                         <input type="hidden" name="quantity" value="1" />
                         <button type="submit" class="quick-add" title="Add to Cart" aria-label="Add to Cart">

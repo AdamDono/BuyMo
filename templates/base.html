@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,9 +12,12 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     {% block extra_css %}{% endblock %}
 </head>
+
 <body>
+    {% block navbar %}
     {% include 'header.html' %}
-    
+    {% endblock %}
+
     <main class="main-content" style="padding: 40px 0;">
         {% block content %}{% endblock %}
     </main>
@@ -26,42 +30,43 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
-    // Global toast function
-    window.showToast = function(message, type = 'success') {
-        const toast = document.getElementById('global-toast');
-        const toastMessage = document.getElementById('global-toast-message');
-        const icon = toast.querySelector('i');
-        
-        toastMessage.textContent = message;
-        
-        // Update icon based on type
-        if (type === 'error' || type === 'danger') {
-            icon.className = 'fas fa-exclamation-circle';
-            toast.className = 'toast-notification show error';
-        } else if (type === 'warning') {
-            icon.className = 'fas fa-exclamation-triangle';
-            toast.className = 'toast-notification show warning';
-        } else {
-            icon.className = 'fas fa-check-circle';
-            toast.className = 'toast-notification show success';
-        }
-        
-        setTimeout(() => {
-            toast.className = 'toast-notification';
-        }, 3500);
-    }
+        // Global toast function
+        window.showToast = function (message, type = 'success') {
+            const toast = document.getElementById('global-toast');
+            const toastMessage = document.getElementById('global-toast-message');
+            const icon = toast.querySelector('i');
 
-    // Show flash messages as toasts
-    document.addEventListener('DOMContentLoaded', function() {
-        {% with messages = get_flashed_messages(with_categories=true) %}
+            toastMessage.textContent = message;
+
+            // Update icon based on type
+            if (type === 'error' || type === 'danger') {
+                icon.className = 'fas fa-exclamation-circle';
+                toast.className = 'toast-notification show error';
+            } else if (type === 'warning') {
+                icon.className = 'fas fa-exclamation-triangle';
+                toast.className = 'toast-notification show warning';
+            } else {
+                icon.className = 'fas fa-check-circle';
+                toast.className = 'toast-notification show success';
+            }
+
+            setTimeout(() => {
+                toast.className = 'toast-notification';
+            }, 3500);
+        }
+
+        // Show flash messages as toasts
+        document.addEventListener('DOMContentLoaded', function () {
+            {% with messages = get_flashed_messages(with_categories = true) %}
             {% if messages %}
-                {% for category, message in messages %}
-                    showToast('{{ message }}', '{{ category }}');
-                {% endfor %}
+            {% for category, message in messages %}
+            showToast('{{ message }}', '{{ category }}');
+            {% endfor %}
             {% endif %}
-        {% endwith %}
-    });
+            {% endwith %}
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>
+
 </html>

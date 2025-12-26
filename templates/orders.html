@@ -9,6 +9,7 @@
         margin: 24px auto;
         padding: 0 16px;
     }
+
     .orders-header {
         background: linear-gradient(135deg, var(--opus-green) 0%, #065c46 100%);
         color: white;
@@ -17,11 +18,13 @@
         margin-bottom: 24px;
         text-align: center;
     }
+
     .orders-header h2 {
         margin: 0 0 8px 0;
         font-weight: 700;
         font-size: 2rem;
     }
+
     .order-card {
         background: white;
         border-radius: 19px;
@@ -30,10 +33,12 @@
         overflow: hidden;
         transition: all 0.3s;
     }
+
     .order-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         transform: translateY(-2px);
     }
+
     .order-header {
         padding: 20px 24px;
         background: #f9fafb;
@@ -44,11 +49,13 @@
         flex-wrap: wrap;
         gap: 12px;
     }
+
     .order-number {
         font-weight: 700;
         color: #1f2937;
         font-size: 1.1rem;
     }
+
     .status-badge {
         padding: 6px 16px;
         border-radius: 20px;
@@ -58,21 +65,26 @@
         align-items: center;
         gap: 6px;
     }
+
     .status-processing {
         background: #dbeafe;
         color: #1e40af;
     }
+
     .status-shipped {
         background: #e9d5ff;
         color: #6b21a8;
     }
+
     .status-delivered {
         background: #d1fae5;
         color: #065f46;
     }
+
     .order-body {
         padding: 24px;
     }
+
     .order-item {
         display: flex;
         align-items: center;
@@ -82,41 +94,49 @@
         border-radius: 12px;
         margin-bottom: 12px;
     }
+
     .order-item img {
         width: 60px;
         height: 60px;
         object-fit: cover;
         border-radius: 8px;
     }
+
     .delivery-info {
         background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
         padding: 20px;
         border-radius: 15px;
         margin-bottom: 20px;
     }
+
     .delivery-info h4 {
         color: var(--opus-green);
         font-weight: 700;
         margin-bottom: 12px;
     }
+
     .delivery-info p {
         margin: 4px 0;
         color: #374151;
         font-size: 0.9rem;
     }
+
     .delivery-info i {
         color: var(--opus-green);
         width: 20px;
     }
+
     .order-summary {
         border-top: 2px solid #e5e7eb;
         padding-top: 16px;
     }
+
     .order-total {
         font-size: 1.25rem;
         font-weight: 700;
         color: #1f2937;
     }
+
     .no-orders {
         background: white;
         padding: 60px 20px;
@@ -124,18 +144,22 @@
         text-align: center;
         border: 1px solid #e5e7eb;
     }
+
     .no-orders i {
         font-size: 4rem;
         color: #d1d5db;
         margin-bottom: 20px;
     }
+
     @media (max-width: 768px) {
         .orders-header {
             padding: 24px 20px;
         }
+
         .orders-header h2 {
             font-size: 1.5rem;
         }
+
         .order-header {
             flex-direction: column;
             align-items: flex-start;
@@ -153,96 +177,97 @@
     </div>
 
     {% if orders %}
-        {% for order in orders %}
-        <div class="order-card">
-            <div class="order-header">
-                <div>
-                    <div class="order-number">Order #{{ order.id }}</div>
-                    <div style="color: #6b7280; font-size: 0.9rem;">
-                        <i class="fas fa-calendar"></i> {{ order.order_date.strftime('%B %d, %Y at %I:%M %p') }}
-                    </div>
-                </div>
-                <div>
-                    {% if order.status == 'processing' %}
-                        <span class="status-badge status-processing">
-                            <i class="fas fa-circle-notch fa-spin"></i> Processing
-                        </span>
-                    {% elif order.status == 'shipped' %}
-                        <span class="status-badge status-shipped">
-                            <i class="fas fa-truck"></i> Shipped
-                        </span>
-                    {% elif order.status == 'delivered' %}
-                        <span class="status-badge status-delivered">
-                            <i class="fas fa-check-circle"></i> Delivered
-                        </span>
-                    {% else %}
-                        <span class="status-badge status-processing">
-                            <i class="fas fa-circle-notch"></i> {{ order.status|title }}
-                        </span>
-                    {% endif %}
+    {% for order in orders %}
+    <div class="order-card">
+        <div class="order-header">
+            <div>
+                <div class="order-number">Order #{{ order.id }}</div>
+                <div style="color: #6b7280; font-size: 0.9rem;">
+                    <i class="fas fa-calendar"></i> {{ order.order_date.strftime('%B %d, %Y at %I:%M %p') }}
                 </div>
             </div>
-            
-            <div class="order-body">
-                <div class="delivery-info">
-                    {% if order.delivery_method == 'delivery' %}
-                        <h4><i class="fas fa-truck"></i> Delivery Address</h4>
-                        <p><i class="fas fa-user"></i> {{ order.full_name }}</p>
-                        <p><i class="fas fa-phone"></i> {{ order.phone }}</p>
-                        <p><i class="fas fa-map-marker-alt"></i> {{ order.street_address }}, {{ order.suburb }}</p>
-                        <p style="margin-left: 20px;">{{ order.city }}, {{ order.province }} {{ order.postal_code }}</p>
-                        {% if order.delivery_fee > 0 %}
-                            <p><i class="fas fa-shipping-fast"></i> Delivery Fee: {{ order.delivery_fee|zar }}</p>
-                        {% else %}
-                            <p><i class="fas fa-gift"></i> <strong>FREE Delivery!</strong></p>
-                        {% endif %}
+            <div>
+                {% if order.status == 'processing' %}
+                <span class="status-badge status-processing">
+                    <i class="fas fa-circle-notch fa-spin"></i> Processing
+                </span>
+                {% elif order.status == 'shipped' %}
+                <span class="status-badge status-shipped">
+                    <i class="fas fa-truck"></i> Shipped
+                </span>
+                {% elif order.status == 'delivered' %}
+                <span class="status-badge status-delivered">
+                    <i class="fas fa-check-circle"></i> Delivered
+                </span>
+                {% else %}
+                <span class="status-badge status-processing">
+                    <i class="fas fa-circle-notch"></i> {{ order.status|title }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="order-body">
+            <div class="delivery-info">
+                {% if order.delivery_method == 'delivery' %}
+                <h4><i class="fas fa-truck"></i> Delivery Address</h4>
+                <p><i class="fas fa-user"></i> {{ order.full_name }}</p>
+                <p><i class="fas fa-phone"></i> {{ order.phone }}</p>
+                <p><i class="fas fa-map-marker-alt"></i> {{ order.street_address }}, {{ order.suburb }}</p>
+                <p style="margin-left: 20px;">{{ order.city }}, {{ order.province }} {{ order.postal_code }}</p>
+                {% if order.delivery_fee > 0 %}
+                <p><i class="fas fa-shipping-fast"></i> Delivery Fee: {{ order.delivery_fee|zar }}</p>
+                {% else %}
+                <p><i class="fas fa-gift"></i> <strong>FREE Delivery!</strong></p>
+                {% endif %}
+                {% else %}
+                <h4><i class="fas fa-store"></i> Store Pickup</h4>
+                <p><i class="fas fa-user"></i> {{ order.full_name }}</p>
+                <p><i class="fas fa-phone"></i> {{ order.phone }}</p>
+                <p><i class="fas fa-map-marker-alt"></i> BuyMo Store - Bank City, Braamfontein, Johannesburg</p>
+                {% if order.pickup_date %}
+                <p><i class="fas fa-calendar-check"></i> Pickup Date: {{ order.pickup_date }}</p>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <h4 style="color: #1f2937; font-weight: 600; margin-bottom: 12px;">Items Ordered</h4>
+                {% for item in order.order_items %}
+                <div class="order-item">
+                    {% if item.image %}
+                    <img src="{{ item.image | resolve_image }}" alt="{{ item.name }}">
                     {% else %}
-                        <h4><i class="fas fa-store"></i> Store Pickup</h4>
-                        <p><i class="fas fa-user"></i> {{ order.full_name }}</p>
-                        <p><i class="fas fa-phone"></i> {{ order.phone }}</p>
-                        <p><i class="fas fa-map-marker-alt"></i> BuyMo Store - Bank City, Braamfontein, Johannesburg</p>
-                        {% if order.pickup_date %}
-                            <p><i class="fas fa-calendar-check"></i> Pickup Date: {{ order.pickup_date }}</p>
-                        {% endif %}
+                    <div style="width: 60px; height: 60px; background: #e5e7eb; border-radius: 8px;"></div>
                     {% endif %}
-                </div>
-                
-                <div style="margin-bottom: 24px;">
-                    <h4 style="color: #1f2937; font-weight: 600; margin-bottom: 12px;">Items Ordered</h4>
-                    {% for item in order.order_items %}
-                    <div class="order-item">
-                        {% if item.image %}
-                            <img src="{{ url_for('static', filename=item.image) }}" alt="{{ item.name }}">
-                        {% else %}
-                            <div style="width: 60px; height: 60px; background: #e5e7eb; border-radius: 8px;"></div>
-                        {% endif %}
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">{{ item.name }}</div>
-                            <div style="color: #6b7280; font-size: 0.9rem;">
-                                Qty: {{ item.quantity }} × {{ item.price_at_purchase|zar }} = {{ (item.quantity * item.price_at_purchase)|zar }}
-                            </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">{{ item.name }}</div>
+                        <div style="color: #6b7280; font-size: 0.9rem;">
+                            Qty: {{ item.quantity }} × {{ item.price_at_purchase|zar }} = {{ (item.quantity *
+                            item.price_at_purchase)|zar }}
                         </div>
                     </div>
-                    {% endfor %}
                 </div>
-                
-                <div class="order-summary">
-                    <div class="order-total">
-                        Total: {{ order.total_amount|zar }}
-                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="order-summary">
+                <div class="order-total">
+                    Total: {{ order.total_amount|zar }}
                 </div>
             </div>
         </div>
-        {% endfor %}
+    </div>
+    {% endfor %}
     {% else %}
-        <div class="no-orders">
-            <i class="fas fa-shopping-bag"></i>
-            <h3>No Orders Yet</h3>
-            <p>You haven't placed any orders. Start shopping now!</p>
-            <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg">
-                <i class="fas fa-shopping-cart"></i> Start Shopping
-            </a>
-        </div>
+    <div class="no-orders">
+        <i class="fas fa-shopping-bag"></i>
+        <h3>No Orders Yet</h3>
+        <p>You haven't placed any orders. Start shopping now!</p>
+        <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg">
+            <i class="fas fa-shopping-cart"></i> Start Shopping
+        </a>
+    </div>
     {% endif %}
 </div>
 {% endblock %}
