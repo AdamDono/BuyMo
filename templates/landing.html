@@ -1,0 +1,521 @@
+{% extends "base.html" %}
+
+{% block title %}BuyMo - Shop Smarter, Live Better{% endblock %}
+
+{% block navbar %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Hero Section */
+    .hero-section {
+        background: linear-gradient(135deg, #076850 0%, #065c46 100%);
+        color: white;
+        padding: 100px 20px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="%23ffffff" fill-opacity="0.1" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,154.7C960,171,1056,181,1152,165.3C1248,149,1344,107,1392,85.3L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>') no-repeat bottom;
+        background-size: cover;
+    }
+
+    .hero-content {
+        position: relative;
+        z-index: 1;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .hero-content h1 {
+        font-size: 3.5rem;
+        font-weight: 800;
+        margin-bottom: 20px;
+        animation: fadeInUp 0.8s ease;
+    }
+
+    .hero-content p {
+        font-size: 1.3rem;
+        margin-bottom: 40px;
+        opacity: 0.95;
+        animation: fadeInUp 0.8s ease 0.2s both;
+    }
+
+    .hero-cta {
+        display: inline-flex;
+        gap: 16px;
+        animation: fadeInUp 0.8s ease 0.4s both;
+    }
+
+    .btn-hero {
+        padding: 16px 40px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        border-radius: 50px;
+        text-decoration: none;
+        transition: all 0.3s;
+        display: inline-block;
+    }
+
+    .btn-hero-primary {
+        background: white;
+        color: #076850;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-hero-primary:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 30px rgba(0, 0, 0, 0.3);
+        color: #076850;
+    }
+
+    .btn-hero-secondary {
+        background: transparent;
+        color: white;
+        border: 2px solid white;
+    }
+
+    .btn-hero-secondary:hover {
+        background: white;
+        color: #076850;
+        transform: translateY(-3px);
+    }
+
+    /* Stats Section */
+    .stats-section {
+        background: #f9fafb;
+        padding: 60px 20px;
+    }
+
+    .stats-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 40px;
+        text-align: center;
+    }
+
+    .stat-item {
+        animation: fadeInUp 0.8s ease;
+    }
+
+    .stat-number {
+        font-size: 3rem;
+        font-weight: 800;
+        color: #076850;
+        margin-bottom: 8px;
+    }
+
+    .stat-label {
+        font-size: 1.1rem;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    /* Categories Section */
+    .categories-section {
+        padding: 80px 20px;
+        background: white;
+    }
+
+    .section-header {
+        text-align: center;
+        max-width: 700px;
+        margin: 0 auto 60px;
+    }
+
+    .section-header h2 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #1f2937;
+        margin-bottom: 16px;
+    }
+
+    .section-header p {
+        font-size: 1.1rem;
+        color: #6b7280;
+    }
+
+    .categories-grid {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 24px;
+    }
+
+    .category-card {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        padding: 40px 20px;
+        border-radius: 20px;
+        text-align: center;
+        transition: all 0.3s;
+        cursor: pointer;
+        text-decoration: none;
+        border: 2px solid transparent;
+    }
+
+    .category-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 40px rgba(7, 104, 80, 0.2);
+        border-color: #076850;
+    }
+
+    .category-icon {
+        font-size: 3rem;
+        margin-bottom: 16px;
+    }
+
+    .category-name {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #076850;
+    }
+
+    /* Featured Products */
+    .featured-section {
+        padding: 80px 20px;
+        background: #f9fafb;
+    }
+
+    .products-grid {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 30px;
+    }
+
+    .product-card {
+        background: white;
+        border-radius: 20px;
+        overflow: hidden;
+        transition: all 0.3s;
+        border: 1px solid #e5e7eb;
+        position: relative;
+    }
+
+    .product-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    .product-image {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+        background: #f3f4f6;
+    }
+
+    .product-info {
+        padding: 20px;
+    }
+
+    .product-name {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 8px;
+    }
+
+    .product-price {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #076850;
+        margin-bottom: 12px;
+    }
+
+    .stock-badge {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .stock-low {
+        background: rgba(239, 68, 68, 0.95);
+        color: white;
+        animation: pulse 2s infinite;
+    }
+
+    .stock-medium {
+        background: rgba(245, 158, 11, 0.95);
+        color: white;
+    }
+
+    .stock-high {
+        background: rgba(34, 197, 94, 0.95);
+        color: white;
+    }
+
+    .btn-view {
+        display: block;
+        width: 100%;
+        padding: 12px;
+        background: #076850;
+        color: white;
+        text-align: center;
+        border-radius: 12px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.3s;
+    }
+
+    .btn-view:hover {
+        background: #065c46;
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    /* Why Choose Us */
+    .why-section {
+        padding: 80px 20px;
+        background: white;
+    }
+
+    .features-grid {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 40px;
+    }
+
+    .feature-card {
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    .feature-icon {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #076850 0%, #065c46 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+        font-size: 2rem;
+        color: white;
+    }
+
+    .feature-title {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 12px;
+    }
+
+    .feature-desc {
+        color: #6b7280;
+        line-height: 1.6;
+    }
+
+    /* CTA Section */
+    .cta-section {
+        background: linear-gradient(135deg, #076850 0%, #065c46 100%);
+        color: white;
+        padding: 80px 20px;
+        text-align: center;
+    }
+
+    .cta-content h2 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 20px;
+    }
+
+    .cta-content p {
+        font-size: 1.2rem;
+        margin-bottom: 40px;
+        opacity: 0.95;
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes pulse {
+
+        0%,
+        100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.05);
+        }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .hero-content h1 {
+            font-size: 2.5rem;
+        }
+
+        .hero-cta {
+            flex-direction: column;
+        }
+
+        .section-header h2 {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section">
+    <div class="hero-content">
+        <h1>🛍️ BuyMo</h1>
+        <p>Shop Smarter, Live Better. Discover amazing products at unbeatable prices.</p>
+        <div class="hero-cta">
+            <a href="{{ url_for('home') }}" class="btn-hero btn-hero-primary">
+                <i class="fas fa-shopping-bag"></i> Start Shopping
+            </a>
+            <a href="{{ url_for('signup') }}" class="btn-hero btn-hero-secondary">
+                <i class="fas fa-user-plus"></i> Sign Up Free
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Stats Section -->
+<section class="stats-section">
+    <div class="stats-container">
+        <div class="stat-item">
+            <div class="stat-number">{{ total_products }}+</div>
+            <div class="stat-label">Products</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ total_customers }}+</div>
+            <div class="stat-label">Happy Customers</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ total_orders }}+</div>
+            <div class="stat-label">Orders Delivered</div>
+        </div>
+    </div>
+</section>
+
+<!-- Categories Section -->
+<section class="categories-section">
+    <div class="section-header">
+        <h2>Shop by Category</h2>
+        <p>Browse our wide selection of products across different categories</p>
+    </div>
+    <div class="categories-grid">
+        {% for category in categories[:6] %}
+        <a href="{{ url_for('home', category=category[1]) }}" class="category-card">
+            <div class="category-icon">📦</div>
+            <div class="category-name">{{ category[1] }}</div>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Featured Products -->
+<section class="featured-section">
+    <div class="section-header">
+        <h2>Featured Products</h2>
+        <p>Check out our latest and most popular items</p>
+    </div>
+    <div class="products-grid">
+        {% for product in featured_products %}
+        <div class="product-card">
+            <!-- Stock Badge -->
+            {% if product[6] <= 5 and product[6]> 0 %}
+                <div class="stock-badge stock-low">
+                    <i class="fas fa-fire"></i> Only {{ product[6] }} left!
+                </div>
+                {% elif product[6] <= 10 and product[6]> 5 %}
+                    <div class="stock-badge stock-medium">
+                        <i class="fas fa-exclamation-triangle"></i> Low Stock
+                    </div>
+                    {% elif product[6] > 10 %}
+                    <div class="stock-badge stock-high">
+                        <i class="fas fa-check-circle"></i> In Stock
+                    </div>
+                    {% endif %}
+
+                    <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" class="product-image">
+                    <div class="product-info">
+                        <div class="product-name">{{ product[1] }}</div>
+                        <div class="product-price">{{ product[2] | zar }}</div>
+                        <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
+                            View Details
+                        </a>
+                    </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Why Choose Us -->
+<section class="why-section">
+    <div class="section-header">
+        <h2>Why Choose BuyMo?</h2>
+        <p>We're committed to providing the best shopping experience</p>
+    </div>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-shipping-fast"></i>
+            </div>
+            <div class="feature-title">Fast Delivery</div>
+            <div class="feature-desc">Free delivery on orders over R1,000. Get your products delivered to your doorstep
+                quickly.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <div class="feature-title">Secure Payment</div>
+            <div class="feature-desc">Your transactions are protected with industry-standard encryption and security.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-headset"></i>
+            </div>
+            <div class="feature-title">24/7 Support</div>
+            <div class="feature-desc">Our customer service team is always ready to help you with any questions.</div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="cta-section">
+    <div class="cta-content">
+        <h2>Ready to Start Shopping?</h2>
+        <p>Join thousands of satisfied customers today</p>
+        <a href="{{ url_for('signup') }}" class="btn-hero btn-hero-primary">
+            <i class="fas fa-rocket"></i> Create Your Account
+        </a>
+    </div>
+</section>
+{% endblock %}

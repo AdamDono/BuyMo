@@ -1244,6 +1244,55 @@ nav .welcome-text {
     font-weight: 500;
 }
 
+/* Low Stock Alert Badges */
+.stock-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.stock-badge i {
+    font-size: 0.85rem;
+}
+
+.stock-critical {
+    background: rgba(239, 68, 68, 0.95);
+    color: white;
+    animation: pulse-glow 2s infinite;
+}
+
+.stock-low {
+    background: rgba(245, 158, 11, 0.95);
+    color: white;
+}
+
+.stock-out {
+    background: rgba(107, 114, 128, 0.95);
+    color: white;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+    }
+}
+
+
 /* Toast Notification */
 .toast-notification {
     position: fixed;

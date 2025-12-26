@@ -25,64 +25,90 @@
                 <select id="category" name="category">
                     <option value="">All Categories</option>
                     {% for category in categories %}
-                        <option value="{{ category[1] }}" {% if category_filter == category[1] %}selected{% endif %}>{{ category[1] }}</option>
+                    <option value="{{ category[1] }}" {% if category_filter==category[1] %}selected{% endif %}>{{
+                        category[1] }}</option>
                     {% endfor %}
                 </select>
             </div>
-            
+
             <div class="filter-group">
                 <label for="min_price">Min Price:</label>
-                <input type="number" id="min_price" name="min_price" step="0.01" placeholder="Min" value="{{ min_price }}">
+                <input type="number" id="min_price" name="min_price" step="0.01" placeholder="Min"
+                    value="{{ min_price }}">
             </div>
-            
+
             <div class="filter-group">
                 <label for="max_price">Max Price:</label>
-                <input type="number" id="max_price" name="max_price" step="0.01" placeholder="Max" value="{{ max_price }}">
+                <input type="number" id="max_price" name="max_price" step="0.01" placeholder="Max"
+                    value="{{ max_price }}">
             </div>
-            
+
             <button type="submit" class="filter-btn">Apply Filters</button>
         </form>
     </section>
 
     <!-- Products Grid with spacing fix -->
     <div class="spacing-fix"></div>
-    
+
     <section class="products-section">
         <h2 class="section-title">Featured Products</h2>
         <div class="products">
             {% for product in products %}
             <div class="product-card product-card-enhanced">
                 <div class="product-thumb-wrap">
-                    <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}">
-                    <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="quick-add-form">
-                        <input type="hidden" name="quantity" value="1" />
-                        <button type="submit" class="quick-add" title="Add to Cart" aria-label="Add to Cart">
-                            <i class="fas fa-cart-plus"></i>
-                        </button>
-                    </form>
+                    <!-- Low Stock Badge -->
+                    {% if product[6] is defined and product[6] is not none %}
+                    {% if product[6] <= 5 and product[6]> 0 %}
+                        <div class="stock-badge stock-critical">
+                            <i class="fas fa-fire"></i> Only {{ product[6] }} left!
+                        </div>
+                        {% elif product[6] <= 10 and product[6]> 5 %}
+                            <div class="stock-badge stock-low">
+                                <i class="fas fa-exclamation-triangle"></i> Low Stock
+                            </div>
+                            {% elif product[6] == 0 %}
+                            <div class="stock-badge stock-out">
+                                <i class="fas fa-times-circle"></i> Out of Stock
+                            </div>
+                            {% endif %}
+                            {% endif %}
+
+                            <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}">
+                            <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}"
+                                class="quick-add-form">
+                                <input type="hidden" name="quantity" value="1" />
+                                <button type="submit" class="quick-add" title="Add to Cart" aria-label="Add to Cart">
+                                    <i class="fas fa-cart-plus"></i>
+                                </button>
+                            </form>
                 </div>
                 <div class="product-info">
                     <h3>{{ product[1] }}</h3>
-                    {% set rating = (avg_ratings[product[0]] if (avg_ratings is defined and product[0] in avg_ratings) else 0) %}
-                    {% set review_count = (review_counts[product[0]] if (review_counts is defined and product[0] in review_counts) else 0) %}
+                    {% set rating = (avg_ratings[product[0]] if (avg_ratings is defined and product[0] in avg_ratings)
+                    else 0) %}
+                    {% set review_count = (review_counts[product[0]] if (review_counts is defined and product[0] in
+                    review_counts) else 0) %}
                     <div class="rating mb-2" aria-label="Rating: {{ rating }}/5">
                         {% for i in range(1, 6) %}
-                            <i class="fa{% if i <= rating %}s{% else %}r{% endif %} fa-star"></i>
+                        <i class="fa{% if i <= rating %}s{% else %}r{% endif %} fa-star"></i>
                         {% endfor %}
-                        <span class="rating-value">({{ rating }}) · {{ review_count }} review{% if review_count != 1 %}s{% endif %}</span>
+                        <span class="rating-value">({{ rating }}) · {{ review_count }} review{% if review_count != 1
+                            %}s{% endif %}</span>
                     </div>
                     <p class="price mb-3">{{ product[2] | zar }}</p>
-                    
+
                     <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
                         View Product
                     </a>
-                    
+
                     {% if current_user.is_authenticated and current_user.is_admin %}
                     <div class="admin-buttons">
-                        <a href="{{ url_for('edit_product', product_id=product[0]) }}" class="btn-edit" title="Edit Product">
+                        <a href="{{ url_for('edit_product', product_id=product[0]) }}" class="btn-edit"
+                            title="Edit Product">
                             <i class="fas fa-edit"></i> Edit
                         </a>
-                        <form action="{{ url_for('delete_product', product_id=product[0]) }}" method="POST" class="delete-form" data-product-name="{{ product[1] }}">
+                        <form action="{{ url_for('delete_product', product_id=product[0]) }}" method="POST"
+                            class="delete-form" data-product-name="{{ product[1] }}">
                             <button type="submit" class="btn-delete" title="Delete Product">
                                 <i class="fas fa-trash-alt"></i> Delete
                             </button>
@@ -99,45 +125,45 @@
 
 {% block extra_js %}
 <script>
-// Quick add to cart with toast
-document.addEventListener('DOMContentLoaded', function() {
-    const quickAddForms = document.querySelectorAll('.quick-add-form');
-    
-    quickAddForms.forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            
-            fetch(this.action, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (response.ok) {
-                    showToast('Added to cart!', 'success');
-                } else {
-                    showToast('Error adding to cart', 'error');
+    // Quick add to cart with toast
+    document.addEventListener('DOMContentLoaded', function () {
+        const quickAddForms = document.querySelectorAll('.quick-add-form');
+
+        quickAddForms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                const formData = new FormData(this);
+
+                fetch(this.action, {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => {
+                        if (response.ok) {
+                            showToast('Added to cart!', 'success');
+                        } else {
+                            showToast('Error adding to cart', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showToast('Error adding to cart', 'error');
+                    });
+            });
+        });
+
+        // Delete product confirmation with toast
+        const deleteForms = document.querySelectorAll('.delete-form');
+        deleteForms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const productName = this.dataset.productName;
+
+                if (confirm(`Are you sure you want to delete "${productName}"?`)) {
+                    this.submit();
                 }
-            })
-            .catch(error => {
-                showToast('Error adding to cart', 'error');
             });
         });
     });
-
-    // Delete product confirmation with toast
-    const deleteForms = document.querySelectorAll('.delete-form');
-    deleteForms.forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const productName = this.dataset.productName;
-            
-            if (confirm(`Are you sure you want to delete "${productName}"?`)) {
-                this.submit();
-            }
-        });
-    });
-});
 </script>
 {% endblock %}

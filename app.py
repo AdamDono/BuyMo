@@ -96,7 +96,44 @@ def calculate_profile_completion(user):
 # Routes
 @app.route('/')
 def index():
-    return redirect(url_for('signup'))
+    """Landing page with featured products and categories"""
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Get featured products (latest 8 products)
+    cur.execute('''
+        SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        WHERE COALESCE(p.is_active, true) = true
+        ORDER BY p.id DESC
+        LIMIT 8
+    ''')
+    featured_products = cur.fetchall()
+    
+    # Get all categories
+    cur.execute('SELECT * FROM categories ORDER BY name')
+    categories = cur.fetchall()
+    
+    # Get stats for social proof
+    cur.execute('SELECT COUNT(*) FROM products WHERE COALESCE(is_active, true) = true')
+    total_products = cur.fetchone()[0]
+    
+    cur.execute('SELECT COUNT(*) FROM orders')
+    total_orders = cur.fetchone()[0]
+    
+    cur.execute('SELECT COUNT(*) FROM users')
+    total_customers = cur.fetchone()[0]
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('landing.html', 
+                         featured_products=featured_products,
+                         categories=categories,
+                         total_products=total_products,
+                         total_orders=total_orders,
+                         total_customers=total_customers)
 
 @app.route('/get-started')
 def get_started():
@@ -172,14 +209,14 @@ def home():
     
     if has_is_active:
         query = '''
-            SELECT p.id, p.name, p.price, p.description, p.image, c.name 
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
             FROM products p
             JOIN categories c ON p.category_id = c.id
             WHERE COALESCE(p.is_active, true) = true
         '''
     else:
         query = '''
-            SELECT p.id, p.name, p.price, p.description, p.image, c.name 
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
             FROM products p
             JOIN categories c ON p.category_id = c.id
             WHERE 1=1
