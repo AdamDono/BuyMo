@@ -520,6 +520,22 @@ def add_to_cart(product_id):
 
     return redirect(url_for('cart'))
 
+@app.route('/api/cart-count')
+@login_required
+def api_cart_count():
+    """API endpoint to get current cart item count"""
+    try:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return jsonify({'count': count})
+    except Exception as e:
+        logger.error(f"Error fetching cart count: {str(e)}")
+        return jsonify({'count': 0})
+
 @app.route('/cart')
 @login_required
 def cart():

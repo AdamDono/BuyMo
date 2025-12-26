@@ -160,32 +160,13 @@
                     flyingImg.remove();
                 }, 800);
 
-                // Pulse cart icon and update badge
+                // Pulse cart icon
                 const cartLink = document.querySelector('.cart-link');
                 if (cartLink) {
                     cartLink.classList.add('cart-pulse');
                     setTimeout(() => {
                         cartLink.classList.remove('cart-pulse');
                     }, 300);
-
-                    // Update or create badge
-                    let badge = document.getElementById('cart-badge');
-                    if (badge) {
-                        // Increment existing badge
-                        let currentCount = parseInt(badge.textContent);
-                        badge.textContent = currentCount + 1;
-                        badge.classList.add('cart-badge-update');
-                        setTimeout(() => {
-                            badge.classList.remove('cart-badge-update');
-                        }, 500);
-                    } else {
-                        // Create new badge
-                        badge = document.createElement('span');
-                        badge.className = 'cart-badge';
-                        badge.id = 'cart-badge';
-                        badge.textContent = '1';
-                        cartLink.appendChild(badge);
-                    }
                 }
 
                 const formData = new FormData(this);
@@ -197,6 +178,40 @@
                     .then(response => {
                         if (response.ok) {
                             showToast('✓ Added to cart!', 'success');
+
+                            // Fetch updated cart count from server
+                            fetch('/api/cart-count')
+                                .then(res => res.json())
+                                .then(data => {
+                                    const cartLink = document.querySelector('.cart-link');
+                                    if (cartLink) {
+                                        let badge = document.getElementById('cart-badge');
+
+                                        if (data.count > 0) {
+                                            if (badge) {
+                                                // Update existing badge
+                                                badge.textContent = data.count;
+                                                badge.classList.add('cart-badge-update');
+                                                setTimeout(() => {
+                                                    badge.classList.remove('cart-badge-update');
+                                                }, 500);
+                                            } else {
+                                                // Create new badge
+                                                badge = document.createElement('span');
+                                                badge.className = 'cart-badge';
+                                                badge.id = 'cart-badge';
+                                                badge.textContent = data.count;
+                                                cartLink.appendChild(badge);
+                                            }
+                                        } else {
+                                            // If count is 0, remove badge if it exists
+                                            if (badge) {
+                                                badge.remove();
+                                            }
+                                        }
+                                    }
+                                })
+                                .catch(err => console.error('Error fetching cart count:', err));
 
                             // Button success feedback
                             const originalHTML = button.innerHTML;
