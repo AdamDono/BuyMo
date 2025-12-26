@@ -12,6 +12,8 @@ from datetime import timedelta
 import time
 import cloudinary
 import cloudinary.uploader
+import random
+import string
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -92,6 +94,14 @@ def calculate_profile_completion(user):
         completion += 1
     
     return int((completion / total_fields) * 100)
+
+def generate_tracking_number():
+    """Generate a unique tracking number in format: BM-YYYYMMDD-XXXXX"""
+    from datetime import datetime
+    date_str = datetime.now().strftime('%Y%m%d')
+    random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    return f"BM-{date_str}-{random_str}"
+
 
 # Routes
 @app.route('/')
@@ -750,16 +760,20 @@ def payfast_notify():
 
             # delivery_info already loaded from pending_orders table above
             
+            # Generate unique tracking number
+            tracking_number = generate_tracking_number()
+            
             cur.execute('''
                 INSERT INTO orders (
-                    user_id, total_amount, delivery_method, full_name, phone,
+                    user_id, tracking_number, total_amount, delivery_method, full_name, phone,
                     street_address, suburb, city, province, postal_code,
                     delivery_fee, pickup_date, status
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
-                user_id, 
+                user_id,
+                tracking_number,
                 total_amount,
                 delivery_info.get('delivery_method', 'delivery'),
                 delivery_info.get('full_name'),

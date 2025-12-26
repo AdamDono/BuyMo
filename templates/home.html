@@ -125,13 +125,49 @@
 
 {% block extra_js %}
 <script>
-    // Quick add to cart with toast
+    // Quick add to cart with flying animation
     document.addEventListener('DOMContentLoaded', function () {
         const quickAddForms = document.querySelectorAll('.quick-add-form');
 
         quickAddForms.forEach(form => {
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
+
+                const button = this.querySelector('.quick-add');
+                const productCard = this.closest('.product-card');
+                const productImage = productCard.querySelector('img');
+
+                // Create flying image
+                const flyingImg = document.createElement('img');
+                flyingImg.src = productImage.src;
+                flyingImg.className = 'cart-item-flying';
+
+                // Position at product image
+                const rect = productImage.getBoundingClientRect();
+                flyingImg.style.position = 'fixed';
+                flyingImg.style.left = rect.left + 'px';
+                flyingImg.style.top = rect.top + 'px';
+                flyingImg.style.width = rect.width + 'px';
+                flyingImg.style.height = rect.height + 'px';
+                flyingImg.style.objectFit = 'cover';
+                flyingImg.style.borderRadius = '12px';
+                flyingImg.style.zIndex = '9999';
+
+                document.body.appendChild(flyingImg);
+
+                // Remove after animation
+                setTimeout(() => {
+                    flyingImg.remove();
+                }, 800);
+
+                // Pulse cart icon if exists
+                const cartIcon = document.querySelector('nav a[href*="cart"] i');
+                if (cartIcon) {
+                    cartIcon.parentElement.classList.add('cart-pulse');
+                    setTimeout(() => {
+                        cartIcon.parentElement.classList.remove('cart-pulse');
+                    }, 300);
+                }
 
                 const formData = new FormData(this);
 
@@ -141,7 +177,17 @@
                 })
                     .then(response => {
                         if (response.ok) {
-                            showToast('Added to cart!', 'success');
+                            showToast('✓ Added to cart!', 'success');
+
+                            // Button success feedback
+                            const originalHTML = button.innerHTML;
+                            button.innerHTML = '<i class="fas fa-check"></i>';
+                            button.style.background = '#10b981';
+
+                            setTimeout(() => {
+                                button.innerHTML = originalHTML;
+                                button.style.background = '';
+                            }, 1500);
                         } else {
                             showToast('Error adding to cart', 'error');
                         }
@@ -152,7 +198,7 @@
             });
         });
 
-        // Delete product confirmation with toast
+        // Delete product confirmation
         const deleteForms = document.querySelectorAll('.delete-form');
         deleteForms.forEach(form => {
             form.addEventListener('submit', function (e) {

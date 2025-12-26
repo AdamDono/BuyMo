@@ -123,6 +123,7 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS orders (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
+            tracking_number VARCHAR(20) UNIQUE,
             total_amount DECIMAL(10, 2) NOT NULL,
             order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             delivery_method VARCHAR(20) DEFAULT 'delivery',
@@ -139,6 +140,19 @@ def create_tables():
             pickup_date DATE,
             FOREIGN KEY (user_id) REFERENCES users (id)
         );
+    ''')
+    
+    # Add tracking_number column if it doesn't exist (for existing databases)
+    cur.execute('''
+        DO $$ 
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='tracking_number'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN tracking_number VARCHAR(20) UNIQUE;
+            END IF;
+        END $$;
     ''')
     
     # Order items table for completed order details
