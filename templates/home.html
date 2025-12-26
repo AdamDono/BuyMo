@@ -160,13 +160,32 @@
                     flyingImg.remove();
                 }, 800);
 
-                // Pulse cart icon if exists
-                const cartIcon = document.querySelector('nav a[href*="cart"] i');
-                if (cartIcon) {
-                    cartIcon.parentElement.classList.add('cart-pulse');
+                // Pulse cart icon and update badge
+                const cartLink = document.querySelector('.cart-link');
+                if (cartLink) {
+                    cartLink.classList.add('cart-pulse');
                     setTimeout(() => {
-                        cartIcon.parentElement.classList.remove('cart-pulse');
+                        cartLink.classList.remove('cart-pulse');
                     }, 300);
+
+                    // Update or create badge
+                    let badge = document.getElementById('cart-badge');
+                    if (badge) {
+                        // Increment existing badge
+                        let currentCount = parseInt(badge.textContent);
+                        badge.textContent = currentCount + 1;
+                        badge.classList.add('cart-badge-update');
+                        setTimeout(() => {
+                            badge.classList.remove('cart-badge-update');
+                        }, 500);
+                    } else {
+                        // Create new badge
+                        badge = document.createElement('span');
+                        badge.className = 'cart-badge';
+                        badge.id = 'cart-badge';
+                        badge.textContent = '1';
+                        cartLink.appendChild(badge);
+                    }
                 }
 
                 const formData = new FormData(this);

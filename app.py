@@ -102,6 +102,23 @@ def generate_tracking_number():
     random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
     return f"BM-{date_str}-{random_str}"
 
+@app.context_processor
+def inject_cart_count():
+    """Make cart count available to all templates"""
+    cart_count = 0
+    if current_user.is_authenticated:
+        try:
+            conn = database.get_db_connection()
+            cur = conn.cursor()
+            cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
+            cart_count = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error fetching cart count: {str(e)}")
+            cart_count = 0
+    return dict(cart_count=cart_count)
+
 
 # Routes
 @app.route('/')
