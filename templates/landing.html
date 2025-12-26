@@ -429,9 +429,30 @@
         <p>Browse our wide selection of products across different categories</p>
     </div>
     <div class="categories-grid">
+        {% set category_icons = {
+        'Beauty': '💄',
+        'Books': '📚',
+        'Clothing': '👕',
+        'Electronics': '📱',
+        'Food': '🍔',
+        'Home & Garden': '🏡',
+        'Sports': '⚽',
+        'Toys': '🧸',
+        'Health': '💊',
+        'Automotive': '🚗',
+        'Jewelry': '💍',
+        'Music': '🎵',
+        'Pet Supplies': '🐾',
+        'Office': '📎',
+        'Baby': '👶',
+        'Furniture': '🛋️'
+        } %}
+
         {% for category in categories[:6] %}
         <a href="{{ url_for('home', category=category[1]) }}" class="category-card">
-            <div class="category-icon">📦</div>
+            <div class="category-icon">
+                {{ category_icons.get(category[1], '📦') }}
+            </div>
             <div class="category-name">{{ category[1] }}</div>
         </a>
         {% endfor %}
