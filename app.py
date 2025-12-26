@@ -97,43 +97,67 @@ def calculate_profile_completion(user):
 @app.route('/')
 def index():
     """Landing page with featured products and categories"""
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    
-    # Get featured products (latest 8 products)
-    cur.execute('''
-        SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
-        FROM products p
-        JOIN categories c ON p.category_id = c.id
-        WHERE COALESCE(p.is_active, true) = true
-        ORDER BY p.id DESC
-        LIMIT 8
-    ''')
-    featured_products = cur.fetchall()
-    
-    # Get all categories
-    cur.execute('SELECT * FROM categories ORDER BY name')
-    categories = cur.fetchall()
-    
-    # Get stats for social proof
-    cur.execute('SELECT COUNT(*) FROM products WHERE COALESCE(is_active, true) = true')
-    total_products = cur.fetchone()[0]
-    
-    cur.execute('SELECT COUNT(*) FROM orders')
-    total_orders = cur.fetchone()[0]
-    
-    cur.execute('SELECT COUNT(*) FROM users')
-    total_customers = cur.fetchone()[0]
-    
-    cur.close()
-    conn.close()
-    
-    return render_template('landing.html', 
-                         featured_products=featured_products,
-                         categories=categories,
-                         total_products=total_products,
-                         total_orders=total_orders,
-                         total_customers=total_customers)
+    try:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        # Get featured products (latest 8 products)
+        try:
+            cur.execute('''
+                SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
+                FROM products p
+                JOIN categories c ON p.category_id = c.id
+                ORDER BY p.id DESC
+                LIMIT 8
+            ''')
+            featured_products = cur.fetchall()
+        except Exception as e:
+            logger.error(f"Error fetching featured products: {str(e)}")
+            featured_products = []
+        
+        # Get all categories
+        try:
+            cur.execute('SELECT * FROM categories ORDER BY name')
+            categories = cur.fetchall()
+        except Exception as e:
+            logger.error(f"Error fetching categories: {str(e)}")
+            categories = []
+        
+        # Get stats for social proof
+        try:
+            cur.execute('SELECT COUNT(*) FROM products')
+            total_products = cur.fetchone()[0]
+        except Exception as e:
+            logger.error(f"Error fetching product count: {str(e)}")
+            total_products = 0
+        
+        try:
+            cur.execute('SELECT COUNT(*) FROM orders')
+            total_orders = cur.fetchone()[0]
+        except Exception as e:
+            logger.error(f"Error fetching order count: {str(e)}")
+            total_orders = 0
+        
+        try:
+            cur.execute('SELECT COUNT(*) FROM users')
+            total_customers = cur.fetchone()[0]
+        except Exception as e:
+            logger.error(f"Error fetching user count: {str(e)}")
+            total_customers = 0
+        
+        cur.close()
+        conn.close()
+        
+        return render_template('landing.html', 
+                             featured_products=featured_products,
+                             categories=categories,
+                             total_products=total_products,
+                             total_orders=total_orders,
+                             total_customers=total_customers)
+    except Exception as e:
+        logger.error(f"Critical error in landing page: {str(e)}")
+        # Fallback: redirect to signup if landing page fails
+        return redirect(url_for('signup'))
 
 @app.route('/get-started')
 def get_started():
