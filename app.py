@@ -1562,5 +1562,42 @@ def migrate_database():
     
     return render_template('admin_migrate.html', results=None, migrated=False)
 
+@app.route('/emergency-reset-admin')
+def emergency_reset_admin():
+    """Temporary route to reset admin password in production"""
+    # Simple security key check to prevent random access
+    if request.args.get('key') != 'SecureReset2025':
+        return "Access Denied", 403
+        
+    email = "admin@gmail.com"
+    new_password = "12345678"
+    
+    try:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        # Hash the new password
+        password_hash = generate_password_hash(
+            new_password,
+            method='pbkdf2:sha256',
+            salt_length=16
+        )
+        
+        # Update the user
+        cur.execute("UPDATE users SET password_hash = %s WHERE email = %s", (password_hash, email))
+        
+        if cur.rowcount == 0:
+            result = "User admin@gmail.com not found!"
+        else:
+            conn.commit()
+            result = f"SUCCESS: Password for {email} has been reset to {new_password}"
+            
+        cur.close()
+        conn.close()
+        return result
+        
+    except Exception as e:
+        return f"Error: {str(e)}"
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render
