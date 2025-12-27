@@ -1571,6 +1571,7 @@ def emergency_reset_admin():
         
     email = "admin@gmail.com"
     new_password = "12345678"
+    username = "Admin"
     
     try:
         conn = database.get_db_connection()
@@ -1583,15 +1584,23 @@ def emergency_reset_admin():
             salt_length=16
         )
         
-        # Update the user
-        cur.execute("UPDATE users SET password_hash = %s WHERE email = %s", (password_hash, email))
+        # Check if user exists
+        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+        user = cur.fetchone()
         
-        if cur.rowcount == 0:
-            result = "User admin@gmail.com not found!"
+        if user:
+            # Update password
+            cur.execute("UPDATE users SET password_hash = %s, is_admin = TRUE WHERE id = %s", (password_hash, user[0]))
+            result = f"SUCCESS: Password for EXISTING user {email} has been reset."
         else:
-            conn.commit()
-            result = f"SUCCESS: Password for {email} has been reset to {new_password}"
-            
+            # Create user
+            cur.execute("""
+                INSERT INTO users (username, email, password_hash, is_admin)
+                VALUES (%s, %s, %s, TRUE)
+            """, (username, email, password_hash))
+            result = f"SUCCESS: NEW Admin user {email} created with password {new_password}."
+
+        conn.commit()
         cur.close()
         conn.close()
         return result
