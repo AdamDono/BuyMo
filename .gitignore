@@ -1,5 +1,10 @@
 __pycache__/
 *.pyc
 .env
-.env
 *.db
+.DS_Store
+
+# Ignore documentation and tool files
+*.md
+!README.md
+.codecy

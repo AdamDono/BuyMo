@@ -17,6 +17,11 @@ def get_db_connection():
     )
     return conn
 
+def return_db_connection(conn):
+    """Legacy compatibility - just close the connection"""
+    if conn:
+        conn.close()
+
 def create_user(username, email, password):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -31,7 +36,7 @@ def create_user(username, email, password):
     )
     conn.commit()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
 
 def get_user_by_email(email):
     conn = get_db_connection()
@@ -39,7 +44,7 @@ def get_user_by_email(email):
     cur.execute('SELECT * FROM users WHERE email = %s;', (email,))
     user = cur.fetchone()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
     return user
 
 def create_tables():
@@ -123,10 +128,36 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS orders (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
+            tracking_number VARCHAR(20) UNIQUE,
             total_amount DECIMAL(10, 2) NOT NULL,
             order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            delivery_method VARCHAR(20) DEFAULT 'delivery',
+            full_name VARCHAR(100),
+            phone VARCHAR(20),
+            street_address TEXT,
+            suburb VARCHAR(100),
+            city VARCHAR(100),
+            province VARCHAR(50),
+            postal_code VARCHAR(10),
+            delivery_fee DECIMAL(10, 2) DEFAULT 50.00,
+            status VARCHAR(50) DEFAULT 'processing',
+            status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            pickup_date DATE,
             FOREIGN KEY (user_id) REFERENCES users (id)
         );
+    ''')
+    
+    # Add tracking_number column if it doesn't exist (for existing databases)
+    cur.execute('''
+        DO $$ 
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='tracking_number'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN tracking_number VARCHAR(20) UNIQUE;
+            END IF;
+        END $$;
     ''')
     
     # Order items table for completed order details
@@ -142,9 +173,17 @@ def create_tables():
         );
     ''')
     
+    # Create indexes for better performance
+    cur.execute('''
+        CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+        CREATE INDEX IF NOT EXISTS idx_cart_user ON cart_items(user_id);
+        CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+        CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+    ''')
+
     conn.commit()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
 
 def get_user_details(user_id):
     conn = get_db_connection()
@@ -156,7 +195,7 @@ def get_user_details(user_id):
     ''', (user_id,))
     user = cur.fetchone()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
     return user
 
 def get_user_by_id(user_id):
@@ -165,7 +204,7 @@ def get_user_by_id(user_id):
     cur.execute('SELECT * FROM users WHERE id = %s', (user_id,))
     user = cur.fetchone()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
     return user
 
 def update_user_profile(user_id, username, email, profile_image=None):
@@ -185,7 +224,7 @@ def update_user_profile(user_id, username, email, profile_image=None):
         return False
     finally:
         cur.close()
-        conn.close()
+        return_db_connection(conn)
 
 def update_user_password(user_id, new_password_hash):
     conn = get_db_connection()
@@ -200,7 +239,8 @@ def update_user_password(user_id, new_password_hash):
         return False
     finally:
         cur.close()
-        conn.close()
+        return_db_connection(conn)
+
 
 # Call the function to create tables
 create_tables()

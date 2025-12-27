@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, abort, session
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, session, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import database
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,7 +9,11 @@ import requests
 from urllib.parse import urlencode
 import logging
 from datetime import timedelta
-import time  # Added to resolve NameError
+import time
+import cloudinary
+import cloudinary.uploader
+import random
+import string
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -55,6 +59,14 @@ def format_zar(amount):
     except (ValueError, TypeError):
         return "R0.00"
 
+@app.template_filter('resolve_image')
+def resolve_image(image_path):
+    if not image_path:
+        return url_for('static', filename='uploads/default-product.png')
+    if image_path.startswith('http') or image_path.startswith('https'):
+        return image_path
+    return url_for('static', filename=image_path)
+
 # Configure upload folder and allowed extensions
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['UPLOAD_FOLDER_PROFILES'] = 'static/uploads/profiles'
@@ -64,10 +76,126 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
+def calculate_profile_completion(user):
+    """Calculate profile completion percentage"""
+    completion = 0
+    total_fields = 3
+    
+    # Username (always present)
+    if user[1]:
+        completion += 1
+    
+    # Email (always present)
+    if user[2]:
+        completion += 1
+    
+    # Profile image
+    if user[4] and user[4] != 'uploads/profiles/default-profile.png':
+        completion += 1
+    
+    return int((completion / total_fields) * 100)
+
+def generate_tracking_number():
+    """Generate a unique tracking number in format: BM-YYYYMMDD-XXXXX"""
+    from datetime import datetime
+    date_str = datetime.now().strftime('%Y%m%d')
+    random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    return f"BM-{date_str}-{random_str}"
+
+@app.context_processor
+def inject_cart_count():
+    """Make cart count available to all templates with caching"""
+    cart_count = 0
+    if current_user.is_authenticated:
+        # Use session cache to avoid DB query on every request
+        cache_key = f'cart_count_{current_user.id}'
+        
+        # Check if we have a cached value in session
+        if cache_key in session:
+            cart_count = session[cache_key]
+        else:
+            # Only query DB if not cached
+            try:
+                conn = database.get_db_connection()
+                cur = conn.cursor()
+                cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
+                cart_count = cur.fetchone()[0]
+                cur.close()
+                conn.close()
+                # Cache for this session
+                session[cache_key] = cart_count
+            except Exception as e:
+                logger.error(f"Error fetching cart count: {str(e)}")
+                cart_count = 0
+    return dict(cart_count=cart_count)
+
+
+
 # Routes
 @app.route('/')
 def index():
-    return redirect(url_for('signup'))
+    """Landing page with featured products and categories"""
+    try:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        # Get featured products (latest 8 products)
+        try:
+            cur.execute('''
+                SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
+                FROM products p
+                JOIN categories c ON p.category_id = c.id
+                ORDER BY p.id DESC
+                LIMIT 8
+            ''')
+            featured_products = cur.fetchall()
+        except Exception as e:
+            logger.error(f"Error fetching featured products: {str(e)}")
+            featured_products = []
+        
+        # Get all categories
+        try:
+            cur.execute('SELECT * FROM categories ORDER BY name')
+            categories = cur.fetchall()
+        except Exception as e:
+            logger.error(f"Error fetching categories: {str(e)}")
+            categories = []
+        
+        # Get stats for social proof
+        try:
+            cur.execute('SELECT COUNT(*) FROM products')
+            total_products = cur.fetchone()[0]
+        except Exception as e:
+            logger.error(f"Error fetching product count: {str(e)}")
+            total_products = 0
+        
+        try:
+            cur.execute('SELECT COUNT(*) FROM orders')
+            total_orders = cur.fetchone()[0]
+        except Exception as e:
+            logger.error(f"Error fetching order count: {str(e)}")
+            total_orders = 0
+        
+        try:
+            cur.execute('SELECT COUNT(*) FROM users')
+            total_customers = cur.fetchone()[0]
+        except Exception as e:
+            logger.error(f"Error fetching user count: {str(e)}")
+            total_customers = 0
+        
+        cur.close()
+        conn.close()
+        
+        return render_template('landing.html', 
+                             featured_products=featured_products,
+                             categories=categories,
+                             total_products=total_products,
+                             total_orders=total_orders,
+                             total_customers=total_customers)
+    except Exception as e:
+        logger.error(f"Critical error in landing page: {str(e)}")
+        # Fallback: redirect to signup if landing page fails
+        return redirect(url_for('signup'))
 
 @app.route('/get-started')
 def get_started():
@@ -82,11 +210,11 @@ def signup():
 
         user = database.get_user_by_email(email)
         if user:
-            flash('Email already registered. Please login.')
+            flash('Email already registered. Please login.', 'warning')
             return redirect(url_for('login'))
 
         database.create_user(username, email, password)
-        flash('Registration successful! Please login.')
+        flash('Registration successful! Please login.', 'success')
         return redirect(url_for('login'))
     return render_template('signup.html')
 
@@ -97,39 +225,32 @@ def login():
         password = request.form['password']
 
         user_data = database.get_user_by_email(email)
-        logger.debug("Login attempt - Email: %s, User data: %s", email, user_data)
         if user_data:
             password_hash = user_data[3]
-            logger.debug("Stored password hash: %s", password_hash)
             if check_password_hash(password_hash, password):
                 user = User(id=user_data[0], username=user_data[1], email=user_data[2], is_admin=user_data[4])
                 login_user(user, remember=True, force=True)
                 session.permanent = True
-                logger.debug("Login successful for user: %s, Session: %s", user.username, session)
+                flash(f'Welcome back, {user.username}!', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('home'))
             else:
-                logger.debug("Password mismatch for email: %s", email)
-                flash('Invalid email or password.')
+                flash('Invalid email or password.', 'error')
         else:
-            logger.debug("No user found for email: %s", email)
-            flash('Invalid email or password.')
+            flash('Invalid email or password.', 'error')
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
-    flash('You have been logged out.')
+    flash('You have been logged out.', 'success')
     return redirect(url_for('index'))
 
 @app.route('/home')
 @login_required
 def home():
-    logger.debug("Home route hit. Current user authenticated: %s", current_user.is_authenticated)
-    logger.debug("Session contents at home: %s", session)
     if not current_user.is_authenticated:
-        logger.debug("User not authenticated, redirecting to login")
         return redirect(url_for('login'))
 
     conn = database.get_db_connection()
@@ -140,12 +261,28 @@ def home():
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', "").strip()
 
-    query = '''
-        SELECT p.id, p.name, p.price, p.description, p.image, c.name 
-        FROM products p
-        JOIN categories c ON p.category_id = c.id
-        WHERE 1=1
-    '''
+    # Check if is_active column exists
+    cur.execute("""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='products' AND column_name='is_active'
+    """)
+    has_is_active = cur.fetchone() is not None
+    
+    if has_is_active:
+        query = '''
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
+            FROM products p
+            JOIN categories c ON p.category_id = c.id
+            WHERE COALESCE(p.is_active, true) = true
+        '''
+    else:
+        query = '''
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
+            FROM products p
+            JOIN categories c ON p.category_id = c.id
+            WHERE 1=1
+        '''
     params = []
 
     if search_query:
@@ -169,10 +306,24 @@ def home():
     cur.execute('SELECT * FROM categories;')
     categories = cur.fetchall()
 
+    # Fetch average ratings and review counts for all products
+    avg_ratings = {}
+    review_counts = {}
+    for product in products:
+        cur.execute('''
+            SELECT AVG(rating), COUNT(*) FROM reviews WHERE product_id = %s
+        ''', (product[0],))
+        result = cur.fetchone()
+        avg_ratings[product[0]] = round(result[0], 1) if result[0] else 0
+        review_counts[product[0]] = result[1] if result[1] else 0
+
     cur.close()
     conn.close()
 
-    return render_template('home.html', products=products, categories=categories, search_query=search_query, category_filter=category_filter, min_price=min_price, max_price=max_price)
+    return render_template('home.html', products=products, categories=categories, 
+                         search_query=search_query, category_filter=category_filter, 
+                         min_price=min_price, max_price=max_price, 
+                         avg_ratings=avg_ratings, review_counts=review_counts)
 
 @app.route('/product/<int:product_id>')
 def product(product_id):
@@ -223,7 +374,7 @@ def product(product_id):
             show_quantity=current_user.is_authenticated and current_user.is_admin
         )
     else:
-        flash('Product not found.')
+        flash('Product not found.', 'error')
         return redirect(url_for('home'))
 
 @app.route('/product/<int:product_id>/review', methods=['POST'])
@@ -233,7 +384,7 @@ def submit_review(product_id):
     comment = request.form.get('comment')
 
     if not rating or not comment:
-        flash('Please provide a rating and comment.')
+        flash('Please provide a rating and comment.', 'warning')
         return redirect(url_for('product', product_id=product_id))
 
     conn = database.get_db_connection()
@@ -245,10 +396,10 @@ def submit_review(product_id):
             VALUES (%s, %s, %s, %s);
         ''', (product_id, current_user.id, int(rating), comment))
         conn.commit()
-        flash('Review submitted successfully!')
+        flash('Review submitted successfully!', 'success')
     except Exception as e:
-        logger.debug(f"Error submitting review: {str(e)}")
-        flash('An error occurred while submitting the review.')
+        logger.error(f"Error submitting review: {str(e)}")
+        flash('An error occurred while submitting the review.', 'error')
     finally:
         cur.close()
         conn.close()
@@ -259,7 +410,7 @@ def submit_review(product_id):
 @login_required
 def add_product():
     if not current_user.is_admin:
-        flash('You do not have permission to access this page.')
+        flash('You do not have permission to access this page.', 'error')
         return redirect(url_for('home'))
 
     conn = database.get_db_connection()
@@ -279,16 +430,44 @@ def add_product():
         image_url = 'uploads/default-product.png'  # Default image
 
         if not all([name, price, category_id]):
-            flash('Name, Price, and Category are required.')
+            flash('Name, Price, and Category are required.', 'warning')
             return redirect(url_for('add_product'))
 
-        if image and allowed_file(image.filename):
-            # Generate a unique filename using timestamp and user ID
-            filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.jpg")
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            image.save(file_path)
-            image_url = f"uploads/{filename}"
+        if image and image.filename and allowed_file(image.filename):
+            if os.getenv('CLOUDINARY_CLOUD_NAME'):
+                try:
+                    cloudinary.config(
+                        cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
+                        api_key = os.getenv('CLOUDINARY_API_KEY'),
+                        api_secret = os.getenv('CLOUDINARY_API_SECRET')
+                    )
+                    upload_result = cloudinary.uploader.upload(image)
+                    image_url = upload_result['secure_url']
+                    logger.info(f"Image uploaded to Cloudinary: {image_url}")
+                except Exception as e:
+                    logger.error(f"Cloudinary upload failed: {str(e)}")
+                    # Fallback to local if Cloudinary fails? Or just fail?
+                    # Let's try to fallback or just warn.
+                    flash('Cloudinary upload failed, falling back to local storage (ephemeral).', 'warning')
+                    ext = image.filename.rsplit('.', 1)[1].lower()
+                    filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.{ext}")
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                    image.save(file_path)
+                    image_url = f"uploads/{filename}"
+            else:
+                # Generate a unique filename preserving original extension
+                ext = image.filename.rsplit('.', 1)[1].lower()
+                filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}_{current_user.id}.{ext}")
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                # Ensure upload directory exists
+                os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                
+                image.save(file_path)
+                image_url = f"uploads/{filename}"
+                logger.info(f"Image saved to: {file_path}")
+
 
         try:
             conn = database.get_db_connection()
@@ -301,11 +480,11 @@ def add_product():
             ''', (name, float(price), description, image_url, int(category_id), quantity, quantity))
             new_product_id = cur.fetchone()[0]
             conn.commit()
-            flash('Product added successfully!')
+            flash('Product added successfully!', 'success')
             return redirect(url_for('product', product_id=new_product_id))
         except Exception as e:
-            logger.debug(f"Error adding product: {str(e)}")
-            flash('An error occurred while adding the product.')
+            logger.error(f"Error adding product: {str(e)}")
+            flash('An error occurred while adding the product.', 'error')
             conn.rollback()
         finally:
             cur.close()
@@ -342,15 +521,36 @@ def add_to_cart(product_id):
             ''', (current_user.id, product_id, quantity))
 
         conn.commit()
-        flash('Product added to cart!')
+        
+        # Clear cart count cache
+        cache_key = f'cart_count_{current_user.id}'
+        session.pop(cache_key, None)
+        
+        flash('Product added to cart!', 'success')
     except Exception as e:
-        logger.debug(f"Error adding to cart: {str(e)}")
-        flash('An error occurred while adding the product to the cart.')
+        logger.error(f"Error adding to cart: {str(e)}")
+        flash('An error occurred while adding the product to the cart.', 'error')
     finally:
         cur.close()
         conn.close()
 
     return redirect(url_for('cart'))
+
+@app.route('/api/cart-count')
+@login_required
+def api_cart_count():
+    """API endpoint to get current cart item count"""
+    try:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return jsonify({'count': count})
+    except Exception as e:
+        logger.error(f"Error fetching cart count: {str(e)}")
+        return jsonify({'count': 0})
 
 @app.route('/cart')
 @login_required
@@ -375,15 +575,72 @@ def cart():
                          cart_items=cart_items, 
                          total_price=total_price)
 
-@app.route('/checkout', methods=['POST'])
+@app.route('/checkout', methods=['GET', 'POST'])
 @login_required
 def checkout():
     conn = database.get_db_connection()
     cur = conn.cursor()
     
+    # GET: Show checkout form
+    if request.method == 'GET':
+        cur.execute('''
+            SELECT ci.id, p.id, p.name, p.price, p.image, ci.quantity 
+            FROM cart_items ci
+            JOIN products p ON ci.product_id = p.id
+            WHERE ci.user_id = %s
+        ''', (current_user.id,))
+        cart_items = cur.fetchall()
+        
+        if not cart_items:
+            flash('Your cart is empty.', 'warning')
+            cur.close()
+            conn.close()
+            return redirect(url_for('cart'))
+        
+        subtotal = float(sum(item[3] * item[5] for item in cart_items))
+        delivery_fee = 50.00 if subtotal < 1000 else 0.00
+        
+        # Get last order for pre-filling - use a fresh connection to avoid cache
+        last_order = None
+        try:
+            # Try to get last order, but don't fail if columns don't exist yet
+            cur.execute('''
+                SELECT full_name, phone, street_address, suburb, city, province, postal_code
+                FROM orders
+                WHERE user_id = %s AND delivery_method = 'delivery'
+                ORDER BY order_date DESC
+                LIMIT 1
+            ''', (current_user.id,))
+            last_order_data = cur.fetchone()
+            if last_order_data:
+                last_order = {
+                    'full_name': last_order_data[0],
+                    'phone': last_order_data[1],
+                    'street_address': last_order_data[2],
+                    'suburb': last_order_data[3],
+                    'city': last_order_data[4],
+                    'province': last_order_data[5],
+                    'postal_code': last_order_data[6]
+                }
+        except Exception as e:
+            # If query fails (columns don't exist), just skip pre-filling
+            logger.warning(f"Could not fetch last order: {str(e)}")
+            last_order = None
+        
+        cur.close()
+        conn.close()
+        
+        from datetime import date
+        return render_template('checkout.html', 
+                             cart_items=cart_items,
+                             subtotal=subtotal,
+                             delivery_fee=delivery_fee,
+                             last_order=last_order,
+                             today=date.today().isoformat())
+    
+    # POST: Process checkout and redirect to PayFast
     try:
         session['user_id'] = current_user.id
-        logger.debug("Stored user_id: %s in session", session['user_id'])
 
         cur.execute('''
             SELECT p.id, c.quantity, p.remaining_quantity, p.price
@@ -394,27 +651,68 @@ def checkout():
         cart_items = cur.fetchall()
 
         if not cart_items:
-            flash('Your cart is empty.')
+            flash('Your cart is empty.', 'warning')
             return redirect(url_for('cart'))
 
         for item in cart_items:
             if item[2] < item[1]:
-                flash(f'Not enough stock for product ID {item[0]}')
+                flash(f'Not enough stock for product ID {item[0]}', 'error')
                 return redirect(url_for('cart'))
 
-        total_price = sum(item[3] * item[1] for item in cart_items)
+        subtotal = float(sum(item[3] * item[1] for item in cart_items))
+        
+        # Get delivery info from form
+        delivery_method = request.form.get('delivery_method', 'delivery')
+        full_name = request.form.get('full_name')
+        phone = request.form.get('phone')
+        
+        # Calculate delivery fee
+        if delivery_method == 'delivery':
+            delivery_fee = 50.00 if subtotal < 1000 else 0.00
+            street_address = request.form.get('street_address')
+            suburb = request.form.get('suburb')
+            city = request.form.get('city')
+            province = request.form.get('province')
+            postal_code = request.form.get('postal_code')
+            pickup_date = None
+        else:
+            delivery_fee = 0.00
+            street_address = None
+            suburb = None
+            city = None
+            province = None
+            postal_code = None
+            pickup_date = request.form.get('pickup_date')
+        
+        total_price = subtotal + delivery_fee
 
+        # Prepare delivery info JSON
+        delivery_info = {
+            'delivery_method': delivery_method,
+            'full_name': full_name,
+            'phone': phone,
+            'street_address': street_address,
+            'suburb': suburb,
+            'city': city,
+            'province': province,
+            'postal_code': postal_code,
+            'pickup_date': pickup_date,
+            'delivery_fee': float(delivery_fee)
+        }
+        
         cart_items_json = json.dumps([{
             'product_id': item[0],
             'quantity': item[1],
             'price': float(item[3])
         } for item in cart_items])
 
+        delivery_info_json = json.dumps(delivery_info)
+        
         cur.execute('''
-            INSERT INTO pending_orders (user_id, total_amount, cart_items_json)
-            VALUES (%s, %s, %s)
+            INSERT INTO pending_orders (user_id, total_amount, cart_items_json, delivery_info_json)
+            VALUES (%s, %s, %s, %s)
             RETURNING id
-        ''', (current_user.id, total_price, cart_items_json))
+        ''', (current_user.id, total_price, cart_items_json, delivery_info_json))
         pending_order_id = cur.fetchone()[0]
         conn.commit()
 
@@ -454,11 +752,7 @@ def checkout():
 
 @app.route('/payfast/return', methods=['GET'])
 def payfast_return():
-    logger.debug("PayFast return hit. Current user authenticated: %s", current_user.is_authenticated)
-    logger.debug("Session contents: %s", session)
-
     user_id = request.args.get('custom_int1')
-    logger.debug("Attempting to re-authenticate with user_id: %s", user_id)
     if user_id:
         try:
             user_data = database.get_user_by_id(int(user_id))
@@ -467,18 +761,17 @@ def payfast_return():
                 login_user(user, remember=True, force=True)
                 session.permanent = True
                 session['user_id'] = user.id
-                logger.debug("User re-authenticated successfully: %s", user.username)
-                return redirect(url_for('home'))
+                flash('Order placed successfully! Check your orders page for details.', 'success')
+                return redirect(url_for('orders'))
         except ValueError:
-            logger.debug("Invalid user_id format: %s", user_id)
+            pass
     
-    logger.debug("Authentication failed or user_id missing")
     flash('Session expired. Please log in again.')
     return redirect(url_for('login'))
 
 @app.route('/payfast/notify', methods=['POST'])
 def payfast_notify():
-    logger.debug("PayFast ITN received: %s", request.form)
+    logger.info("PayFast ITN received")
 
     if request.form.get('payment_status') == 'COMPLETE':
         pending_order_id = request.form.get('m_payment_id')
@@ -489,18 +782,19 @@ def payfast_notify():
             cur = conn.cursor()
 
             cur.execute('''
-                SELECT user_id, total_amount, cart_items_json
+                SELECT user_id, total_amount, cart_items_json, delivery_info_json
                 FROM pending_orders
                 WHERE id = %s
             ''', (pending_order_id,))
             pending_order = cur.fetchone()
 
             if not pending_order or pending_order[0] != user_id:
-                logger.debug("Invalid order or user mismatch")
+                logger.warning("Invalid order or user mismatch")
                 return "Invalid order", 400
 
             total_amount = pending_order[1]
             cart_items = json.loads(pending_order[2])
+            delivery_info = json.loads(pending_order[3]) if pending_order[3] else {}
 
             for item in cart_items:
                 cur.execute('''
@@ -510,14 +804,38 @@ def payfast_notify():
                 ''', (item['product_id'],))
                 remaining = cur.fetchone()[0]
                 if remaining < item['quantity']:
-                    logger.debug(f"Not enough stock for product {item['product_id']}")
+                    logger.warning(f"Not enough stock for product {item['product_id']}")
                     return "Stock unavailable", 400
 
+            # delivery_info already loaded from pending_orders table above
+            
+            # Generate unique tracking number
+            tracking_number = generate_tracking_number()
+            
             cur.execute('''
-                INSERT INTO orders (user_id, total_amount)
-                VALUES (%s, %s)
+                INSERT INTO orders (
+                    user_id, tracking_number, total_amount, delivery_method, full_name, phone,
+                    street_address, suburb, city, province, postal_code,
+                    delivery_fee, pickup_date, status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            ''', (user_id, total_amount))
+            ''', (
+                user_id,
+                tracking_number,
+                total_amount,
+                delivery_info.get('delivery_method', 'delivery'),
+                delivery_info.get('full_name'),
+                delivery_info.get('phone'),
+                delivery_info.get('street_address'),
+                delivery_info.get('suburb'),
+                delivery_info.get('city'),
+                delivery_info.get('province'),
+                delivery_info.get('postal_code'),
+                delivery_info.get('delivery_fee', 0),
+                delivery_info.get('pickup_date'),
+                'processing'
+            ))
             order_id = cur.fetchone()[0]
 
             for item in cart_items:
@@ -544,11 +862,11 @@ def payfast_notify():
             ''', (pending_order_id,))
 
             conn.commit()
-            logger.debug("Order completed successfully")
+            logger.info("Order completed successfully")
 
         except Exception as e:
             conn.rollback()
-            logger.debug(f"Error processing ITN: {str(e)}")
+            logger.error(f"Error processing ITN: {str(e)}")
             return "Error", 500
         finally:
             conn.close()
@@ -570,6 +888,11 @@ def remove_from_cart(item_id):
         
         if cur.fetchone():
             conn.commit()
+            
+            # Clear cart count cache
+            cache_key = f'cart_count_{current_user.id}'
+            session.pop(cache_key, None)
+            
             flash('Item removed from cart', 'success')
         else:
             flash('Item not found in your cart', 'error')
@@ -650,7 +973,7 @@ def edit_product(product_id):
             ''', (name, price, description, image_url, category_id, product_id))
             
             conn.commit()
-            flash('Product updated successfully!')
+            flash('Product updated successfully!', 'success')
             return redirect(url_for('product', product_id=product_id))
         
         return render_template('edit_product.html', 
@@ -671,21 +994,52 @@ def delete_product(product_id):
     if not current_user.is_admin:
         abort(403)
     
+    force_delete = request.form.get('force_delete') == 'true'
+    
     conn = database.get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
-        cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
-        cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
-        conn.commit()
-        flash('Product deleted successfully')
+        
+        if force_delete:
+            # Force delete - remove from order_items first, then product
+            cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+            cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
+            cur.execute("DELETE FROM order_items WHERE product_id = %s", (product_id,))
+            cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
+            conn.commit()
+            flash('Product permanently deleted!', 'success')
+        else:
+            # Regular delete - check for orders first
+            cur.execute("SELECT COUNT(*) FROM order_items WHERE product_id = %s", (product_id,))
+            order_count = cur.fetchone()[0]
+            
+            if order_count > 0:
+                flash(f'Product has {order_count} order(s). Use "Force Delete" to remove permanently.', 'warning')
+            else:
+                cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+                cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
+                cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
+                conn.commit()
+                flash('Product deleted successfully!', 'success')
+            
     except Exception as e:
         conn.rollback()
-        flash(f'Error deleting product: {str(e)}', 'error')
+        logger.error(f'Error deleting product: {str(e)}')
+        flash(f'Error: {str(e)}', 'error')
     finally:
         conn.close()
     
-    return redirect(url_for('home'))
+    return redirect(url_for('admin_products'))
+
+@app.route('/toggle-product/<int:product_id>', methods=['POST'])
+@login_required
+def toggle_product(product_id):
+    if not current_user.is_admin:
+        abort(403)
+    
+    # Toggle functionality disabled - is_active column doesn't exist in current schema
+    flash('Product toggle feature temporarily disabled.', 'info')
+    return redirect(url_for('admin_products'))
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -699,20 +1053,60 @@ def profile():
         
         if 'profile_image' in request.files:
             file = request.files['profile_image']
-            if file.filename != '' and allowed_file(file.filename):
-                filename = secure_filename(f"user_{current_user.id}.{file.filename.rsplit('.', 1)[1].lower()}")
-                file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                file.save(file_path)
-                profile_image = f"uploads/profiles/{filename}"
-                # Note: Render's ephemeral filesystem means this file may not persist across redeploys
+            if file and file.filename != '' and allowed_file(file.filename):
+                if os.getenv('CLOUDINARY_CLOUD_NAME'):
+                    try:
+                        cloudinary.config(
+                            cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
+                            api_key = os.getenv('CLOUDINARY_API_KEY'),
+                            api_secret = os.getenv('CLOUDINARY_API_SECRET')
+                        )
+                        upload_result = cloudinary.uploader.upload(file)
+                        profile_image = upload_result['secure_url']
+                        logger.info(f"Profile image uploaded to Cloudinary: {profile_image}")
+                    except Exception as e:
+                        logger.error(f"Cloudinary upload failed: {str(e)}")
+                        flash('Image upload failed. Using local storage.', 'warning')
+                        filename = secure_filename(f"user_{current_user.id}_{int(time.time())}.{file.filename.rsplit('.', 1)[1].lower()}")
+                        file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
+                        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                        file.save(file_path)
+                        profile_image = f"uploads/profiles/{filename}"
+                else:
+                    filename = secure_filename(f"user_{current_user.id}_{int(time.time())}.{file.filename.rsplit('.', 1)[1].lower()}")
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER_PROFILES'], filename)
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    file.save(file_path)
+                    profile_image = f"uploads/profiles/{filename}"
+                    logger.info(f"Profile image saved: {profile_image}")
+
 
         if update_user_profile(current_user.id, username, email, profile_image):
             flash('Profile updated successfully!', 'success')
         else:
-            flash('Error updating profile', 'danger')
+            flash('Error updating profile', 'error')
     
-    return render_template('profile.html', user=user)
+    # Calculate profile completion
+    completion = calculate_profile_completion(user)
+    
+    # Fetch user orders
+    orders = []
+    try:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT id, total_amount, status, order_date, tracking_number 
+            FROM orders 
+            WHERE user_id = %s 
+            ORDER BY order_date DESC
+        ''', (current_user.id,))
+        orders = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error fetching user orders: {e}")
+
+    return render_template('profile.html', user=user, completion=completion, orders=orders)
 
 @app.route('/change-password', methods=['POST'])
 @login_required
@@ -746,13 +1140,13 @@ def change_password():
 
         conn = database.get_db_connection()
         cur = conn.cursor()
-        hashed_pw = generate_password_hash(new_password)
+        hashed_pw = generate_password_hash(new_password, method='pbkdf2:sha256', salt_length=16)
         cur.execute(
             "UPDATE users SET password_hash = %s WHERE id = %s",
             (hashed_pw, current_user.id)
         )
         conn.commit()
-        logger.debug("Password updated successfully for user ID: %s", current_user.id)
+        cur.close()
         flash("Password updated successfully!", "success")
 
     except Exception as e:
@@ -798,18 +1192,64 @@ def load_user(user_id):
 @app.route('/orders')
 @login_required
 def orders():
-    logger.debug("Accessing orders route. User authenticated: %s, User ID: %s", current_user.is_authenticated, current_user.id)
+    # Get a fresh connection to avoid schema cache issues
     conn = database.get_db_connection()
+    conn.set_session(autocommit=True)  # Force new transaction
     cur = conn.cursor()
 
-    # Fetch completed orders
-    cur.execute('''
-        SELECT o.id, o.total_amount, o.order_date
-        FROM orders o
-        WHERE o.user_id = %s
-        ORDER BY o.order_date DESC;
-    ''', (current_user.id,))
-    completed_orders = cur.fetchall()
+    # Fetch completed orders with delivery info and status
+    try:
+        cur.execute('''
+            SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
+                   o.full_name, o.phone, o.street_address, o.suburb, o.city, 
+                   o.province, o.postal_code, o.delivery_fee, o.pickup_date
+            FROM orders o
+            WHERE o.user_id = %s
+            ORDER BY o.order_date DESC;
+        ''', (current_user.id,))
+        completed_orders = cur.fetchall()
+    except Exception as e:
+        # If columns don't exist yet, rollback and try basic query
+        logger.error(f"Error fetching orders: {str(e)}")
+        conn.rollback()  # IMPORTANT: Rollback the failed transaction
+        cur.execute('''
+            SELECT o.id, o.total_amount, o.order_date
+            FROM orders o
+            WHERE o.user_id = %s
+            ORDER BY o.order_date DESC;
+        ''', (current_user.id,))
+        basic_orders = cur.fetchall()
+        # Return basic order view with default values
+        order_history = []
+        for order in basic_orders:
+            order_id = order[0]
+            cur.execute('''
+                SELECT p.name, p.image, oi.quantity, oi.price_at_purchase
+                FROM order_items oi
+                JOIN products p ON oi.product_id = p.id
+                WHERE oi.order_id = %s;
+            ''', (order_id,))
+            order_items = cur.fetchall()
+            order_history.append({
+                'id': order_id,
+                'total_amount': float(order[1]),
+                'order_date': order[2],
+                'status': 'processing',
+                'delivery_method': 'delivery',
+                'full_name': 'N/A',
+                'phone': 'N/A',
+                'street_address': 'Address not available',
+                'suburb': '',
+                'city': '',
+                'province': '',
+                'postal_code': '',
+                'delivery_fee': 0,
+                'pickup_date': None,
+                'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
+            })
+        cur.close()
+        conn.close()
+        return render_template('orders.html', orders=order_history)
 
     order_history = []
     for order in completed_orders:
@@ -823,16 +1263,304 @@ def orders():
         order_items = cur.fetchall()
         order_history.append({
             'id': order_id,
-            'total_amount': float(order[1]),  # Convert Decimal to float for template
+            'total_amount': float(order[1]),
             'order_date': order[2],
+            'status': order[3] or 'processing',
+            'delivery_method': order[4] or 'delivery',
+            'full_name': order[5],
+            'phone': order[6],
+            'street_address': order[7],
+            'suburb': order[8],
+            'city': order[9],
+            'province': order[10],
+            'postal_code': order[11],
+            'delivery_fee': float(order[12]) if order[12] else 0,
+            'pickup_date': order[13],
             'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
         })
 
     cur.close()
     conn.close()
 
-    logger.debug("Rendering orders.html with order_history: %s", order_history)
     return render_template('orders.html', orders=order_history)
+
+@app.route('/admin/products')
+@login_required
+def admin_products():
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Fetch all products with order count and active status
+    cur.execute('''
+        SELECT p.id, p.name, p.price, p.remaining_quantity, p.image,
+               COUNT(DISTINCT oi.order_id) as order_count,
+               true as is_active
+        FROM products p
+        LEFT JOIN order_items oi ON p.id = oi.product_id
+        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image
+        ORDER BY p.id DESC
+    ''')
+    products = cur.fetchall()
+    
+    products_list = []
+    for product in products:
+        products_list.append({
+            'id': product[0],
+            'name': product[1],
+            'price': float(product[2]),
+            'stock': product[3],
+            'image': product[4],
+            'order_count': product[5],
+            'is_active': product[6] if len(product) > 6 else True
+        })
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('admin_products.html', products=products_list)
+
+@app.route('/admin/orders')
+@login_required
+def admin_orders():
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+    
+    # Get a fresh connection
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Fetch all orders with user info - use simple query that works
+    cur.execute('''
+        SELECT o.id, o.total_amount, o.order_date, 
+               COALESCE(o.status, 'processing') as status,
+               COALESCE(o.delivery_method, 'delivery') as delivery_method,
+               u.username, u.email
+        FROM orders o
+        JOIN users u ON o.user_id = u.id
+        ORDER BY o.order_date DESC
+    ''')
+    all_orders = cur.fetchall()
+    
+    orders_list = []
+    for order in all_orders:
+        orders_list.append({
+            'id': order[0],
+            'total_amount': float(order[1]),
+            'order_date': order[2],
+            'status': order[3] or 'processing',
+            'delivery_method': order[4] or 'delivery',
+            'customer_name': order[5],
+            'customer_email': order[6]
+        })
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('admin_orders.html', orders=orders_list)
+
+@app.route('/admin/order/<int:order_id>/update-status', methods=['POST'])
+@login_required
+def admin_update_order_status(order_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+    
+    new_status = request.form.get('status')
+    
+    if new_status not in ['processing', 'shipped', 'delivered']:
+        flash('Invalid status.', 'error')
+        return redirect(url_for('admin_orders'))
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute('''
+            UPDATE orders 
+            SET status = %s, status_updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (new_status, order_id))
+        conn.commit()
+        flash(f'Order #{order_id} status updated to {new_status.title()}!', 'success')
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error updating order status: {str(e)}")
+        flash('Error updating order status.', 'error')
+    finally:
+        cur.close()
+        conn.close()
+    
+    return redirect(url_for('admin_orders'))
+
+@app.route('/admin/order/<int:order_id>/details')
+@login_required
+def admin_order_details(order_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Get order details
+        cur.execute('''
+            SELECT o.id, o.total_amount, o.order_date, 
+                   COALESCE(o.status, 'processing') as status,
+                   COALESCE(o.delivery_method, 'delivery') as delivery_method,
+                   o.full_name, o.phone, o.street_address, o.suburb, o.city,
+                   o.province, o.postal_code, o.delivery_fee, o.pickup_date,
+                   u.username, u.email
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.id = %s
+        ''', (order_id,))
+        order = cur.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        # Get order items
+        cur.execute('''
+            SELECT p.name, p.image, oi.quantity, oi.price_at_purchase
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        items = cur.fetchall()
+        
+        order_data = {
+            'id': order[0],
+            'total_amount': float(order[1]),
+            'order_date': order[2].strftime('%B %d, %Y at %I:%M %p'),
+            'status': order[3],
+            'delivery_method': order[4],
+            'full_name': order[5],
+            'phone': order[6],
+            'street_address': order[7],
+            'suburb': order[8],
+            'city': order[9],
+            'province': order[10],
+            'postal_code': order[11],
+            'delivery_fee': float(order[12]) if order[12] else 0,
+            'pickup_date': order[13].strftime('%B %d, %Y') if order[13] else None,
+            'customer_name': order[14],
+            'customer_email': order[15],
+            'items': [{
+                'name': item[0],
+                'image': item[1],
+                'quantity': item[2],
+                'price': float(item[3])
+            } for item in items]
+        }
+        
+        return jsonify(order_data)
+        
+    except Exception as e:
+        logger.error(f"Error fetching order details: {str(e)}")
+        return jsonify({'error': 'Failed to fetch order details'}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/admin/migrate-database', methods=['GET', 'POST'])
+@login_required
+def migrate_database():
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+    
+    if request.method == 'POST':
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        try:
+            results = []
+            
+            # First, add delivery_info_json to pending_orders table
+            try:
+                cur.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='pending_orders' AND column_name='delivery_info_json'
+                """)
+                if cur.fetchone() is None:
+                    cur.execute("ALTER TABLE pending_orders ADD COLUMN delivery_info_json TEXT")
+                    conn.commit()
+                    results.append("✓ Added: pending_orders.delivery_info_json")
+                else:
+                    results.append("○ Exists: pending_orders.delivery_info_json")
+            except Exception as e:
+                conn.rollback()
+                results.append(f"✗ Error: pending_orders.delivery_info_json - {str(e)}")
+            
+            # Add is_active to products table
+            try:
+                cur.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='products' AND column_name='is_active'
+                """)
+                if cur.fetchone() is None:
+                    cur.execute("ALTER TABLE products ADD COLUMN is_active BOOLEAN DEFAULT true")
+                    conn.commit()
+                    results.append("✓ Added: products.is_active")
+                else:
+                    results.append("○ Exists: products.is_active")
+            except Exception as e:
+                conn.rollback()
+                results.append(f"✗ Error: products.is_active - {str(e)}")
+            
+            # Add new columns to orders table
+            columns_to_add = [
+                ("delivery_method", "VARCHAR(20) DEFAULT 'delivery'"),
+                ("full_name", "VARCHAR(100)"),
+                ("phone", "VARCHAR(20)"),
+                ("street_address", "TEXT"),
+                ("suburb", "VARCHAR(100)"),
+                ("city", "VARCHAR(100)"),
+                ("province", "VARCHAR(50)"),
+                ("postal_code", "VARCHAR(10)"),
+                ("delivery_fee", "DECIMAL(10, 2) DEFAULT 50.00"),
+                ("status", "VARCHAR(50) DEFAULT 'processing'"),
+                ("status_updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+                ("pickup_date", "DATE")
+            ]
+            for col_name, col_type in columns_to_add:
+                try:
+                    # Check if column exists
+                    cur.execute(f"""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name='orders' AND column_name='{col_name}'
+                    """)
+                    
+                    if cur.fetchone() is None:
+                        cur.execute(f"ALTER TABLE orders ADD COLUMN {col_name} {col_type}")
+                        conn.commit()
+                        results.append(f"✓ Added: {col_name}")
+                    else:
+                        results.append(f"○ Exists: {col_name}")
+                except Exception as e:
+                    conn.rollback()
+                    results.append(f"✗ Error: {col_name} - {str(e)}")
+            
+            flash(f"Migration complete! {len([r for r in results if '✓' in r])} columns added.", 'success')
+            return render_template('admin_migrate.html', results=results, migrated=True)
+            
+        except Exception as e:
+            conn.rollback()
+            flash(f"Migration failed: {str(e)}", 'error')
+            return render_template('admin_migrate.html', results=[f"Error: {str(e)}"], migrated=False)
+        finally:
+            cur.close()
+            conn.close()
+    
+    return render_template('admin_migrate.html', results=None, migrated=False)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render

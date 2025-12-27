@@ -9,15 +9,15 @@
         <a href="{{ url_for('orders') }}" class="btn-orders mt-3">
             <i class="fas fa-history"></i> View Orders
         </a>
-        
+
         {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <div class="alert alert-info">
-                    {% for message in messages %}
-                        <p>{{ message }}</p>
-                    {% endfor %}
-                </div>
-            {% endif %}
+        {% if messages %}
+        <div class="alert alert-info">
+            {% for message in messages %}
+            <p>{{ message }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% endwith %}
 
         {% if cart_items %}
@@ -37,25 +37,18 @@
                     <tr>
                         <td>
                             <div class="d-flex align-items-center">
-                                {% if item[4] and item[4] != 'uploads/default-product.png' %}
-                                    <img src="{{ url_for('static', filename=item[4]) }}" 
-                                         alt="{{ item[2] }}" 
-                                         class="product-image me-3"
-                                         onerror="this.src='{{ url_for('static', filename='uploads/default-product.png') }}'">
-                                {% else %}
-                                    <img src="{{ url_for('static', filename='uploads/default-product.png') }}" 
-                                         alt="{{ item[2] }}" 
-                                         class="product-image me-3">
-                                {% endif %}
+                                <img src="{{ item[4] | resolve_image }}" alt="{{ item[2] }}" class="product-image me-3">
                                 <span>{{ item[2] }}</span>
                             </div>
                         </td>
                         <td>{{ item[3]|zar }}</td>
-                            <form action="{{ url_for('update_cart', item_id=item[0]) }}" method="POST" class="quantity-form">
-                                <input type="number" name="quantity" 
-                                       value="{{ item[5] }}" min="1" 
-                                       class="quantity-input">
-                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <td>
+                            <form action="{{ url_for('update_cart', item_id=item[0]) }}" method="POST"
+                                class="quantity-form">
+                                <input type="number" name="quantity" value="{{ item[5] }}" min="1"
+                                    class="form-control quantity-input">
+                                <button type="submit" class="btn btn-sm btn-outline-primary"
+                                    aria-label="Update quantity">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
                             </form>
@@ -76,14 +69,12 @@
 
         <div class="cart-summary text-end">
             <h4>Cart Total: {{ total_price|zar }}</h4>
-            <form action="{{ url_for('checkout') }}" method="POST" style="display: inline;">
-                <button type="submit" class="btn btn-primary btn-lg mt-3">
-                    Proceed to Checkout
-                </button>
-            </form>
-            <p class="payment-note">You'll be redirected to PayFast to complete your payment securely.</p>
-        </div>
-        {% else %}
+            <a href="{{ url_for('checkout') }}" class="btn btn-primary btn-lg mt-3"
+                style="display: inline-block; text-decoration: none;">
+                Proceed to Checkout
+            </a>
+            <p class="payment-note">Continue to enter delivery details and payment.</p>
+        </div> {% else %}
         <div class="empty-cart">
             <i class="fas fa-shopping-cart fa-5x text-muted mb-4"></i>
             <h3>Your cart is empty</h3>

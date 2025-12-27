@@ -1,62 +1,249 @@
 {% extends "base.html" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Home - BuyMo{% endblock %}
 
 {% block content %}
-<main>
+<main class="home-container">
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="hero-content">
+            <h1>Welcome to BuyMo</h1>
+            <p class="hero-subtitle">Discover amazing products at unbeatable prices</p>
+        </div>
+    </section>
+
     <!-- Search and Filters -->
-    <div class="search-filters">
+    <section class="search-filters">
         <form action="{{ url_for('home') }}" method="GET" class="search-form">
             <input type="text" name="query" placeholder="Search products..." value="{{ search_query }}">
             <button type="submit">Search</button>
         </form>
 
         <form action="{{ url_for('home') }}" method="GET" class="filter-form">
-            <label for="category">Category:</label>
-            <select id="category" name="category">
-                <option value="">All Categories</option>
-                {% for category in categories %}
-                    <option value="{{ category[1] }}" {% if category_filter == category[1] %}selected{% endif %}>{{ category[1] }}</option>
-                {% endfor %}
-            </select>
-
-            <label for="min_price">Min Price:</label>
-            <input type="number" id="min_price" name="min_price" step="0.01" placeholder="Min" value="{{ min_price }}">
-
-            <label for="max_price">Max Price:</label>
-            <input type="number" id="max_price" name="max_price" step="0.01" placeholder="Max" value="{{ max_price }}">
-
-            <button type="submit">Apply Filters</button>
-        </form>
-    </div>
-    <div class="products">
-        {% for product in products %}
-        <div class="product-card">
-            <img src="{{ url_for('static', filename=product[4] if product[4] else 'uploads/default-product.png') }}" alt="{{ product[1] }}">
-            <div class="product-info">
-                <h3>{{ product[1] }}</h3>
-                <p class="price">{{ product[2] | zar }}</p>
-                
-                <!-- View Product Button (visible to all) -->
-                <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
-                    View Product
-                </a>
-                
-                <!-- Admin buttons (only visible to admins) -->
-                {% if current_user.is_authenticated and current_user.is_admin %}
-                <div class="admin-buttons">
-                    <a href="{{ url_for('edit_product', product_id=product[0]) }}" 
-                       class="btn-edit">Edit</a>
-                    <form action="{{ url_for('delete_product', product_id=product[0]) }}" 
-                          method="POST" 
-                          onsubmit="return confirm('Delete this product?')">
-                        <button type="submit" class="btn-delete">Delete</button>
-                    </form>
-                </div>
-                {% endif %}
+            <div class="filter-group">
+                <label for="category">Category:</label>
+                <select id="category" name="category">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category[1] }}" {% if category_filter==category[1] %}selected{% endif %}>{{
+                        category[1] }}</option>
+                    {% endfor %}
+                </select>
             </div>
+
+            <div class="filter-group">
+                <label for="min_price">Min Price:</label>
+                <input type="number" id="min_price" name="min_price" step="0.01" placeholder="Min"
+                    value="{{ min_price }}">
+            </div>
+
+            <div class="filter-group">
+                <label for="max_price">Max Price:</label>
+                <input type="number" id="max_price" name="max_price" step="0.01" placeholder="Max"
+                    value="{{ max_price }}">
+            </div>
+
+            <button type="submit" class="filter-btn">Apply Filters</button>
+        </form>
+    </section>
+
+    <!-- Products Grid with spacing fix -->
+    <div class="spacing-fix"></div>
+
+    <section class="products-section">
+        <h2 class="section-title">Featured Products</h2>
+        <div class="products">
+            {% for product in products %}
+            <div class="product-card product-card-enhanced">
+                <div class="product-thumb-wrap">
+                    <!-- Low Stock Badge -->
+                    {% if product[6] is defined and product[6] is not none %}
+                    {% if product[6] <= 5 and product[6]> 0 %}
+                        <div class="stock-badge stock-critical">
+                            <i class="fas fa-fire"></i> Only {{ product[6] }} left!
+                        </div>
+                        {% elif product[6] <= 10 and product[6]> 5 %}
+                            <div class="stock-badge stock-low">
+                                <i class="fas fa-exclamation-triangle"></i> Low Stock
+                            </div>
+                            {% elif product[6] == 0 %}
+                            <div class="stock-badge stock-out">
+                                <i class="fas fa-times-circle"></i> Out of Stock
+                            </div>
+                            {% endif %}
+                            {% endif %}
+
+                            <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" loading="lazy">
+                            <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}"
+                                class="quick-add-form">
+                                <input type="hidden" name="quantity" value="1" />
+                                <button type="submit" class="quick-add" title="Add to Cart" aria-label="Add to Cart">
+                                    <i class="fas fa-cart-plus"></i>
+                                </button>
+                            </form>
+                </div>
+                <div class="product-info">
+                    <h3>{{ product[1] }}</h3>
+                    {% set rating = (avg_ratings[product[0]] if (avg_ratings is defined and product[0] in avg_ratings)
+                    else 0) %}
+                    {% set review_count = (review_counts[product[0]] if (review_counts is defined and product[0] in
+                    review_counts) else 0) %}
+                    <div class="rating mb-2" aria-label="Rating: {{ rating }}/5">
+                        {% for i in range(1, 6) %}
+                        <i class="fa{% if i <= rating %}s{% else %}r{% endif %} fa-star"></i>
+                        {% endfor %}
+                        <span class="rating-value">({{ rating }}) · {{ review_count }} review{% if review_count != 1
+                            %}s{% endif %}</span>
+                    </div>
+                    <p class="price mb-3">{{ product[2] | zar }}</p>
+
+                    <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
+                        View Product
+                    </a>
+
+                    {% if current_user.is_authenticated and current_user.is_admin %}
+                    <div class="admin-buttons">
+                        <a href="{{ url_for('edit_product', product_id=product[0]) }}" class="btn-edit"
+                            title="Edit Product">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                        <form action="{{ url_for('delete_product', product_id=product[0]) }}" method="POST"
+                            class="delete-form" data-product-name="{{ product[1] }}">
+                            <button type="submit" class="btn-delete" title="Delete Product">
+                                <i class="fas fa-trash-alt"></i> Delete
+                            </button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
+    </section>
 </main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Quick add to cart with flying animation
+    document.addEventListener('DOMContentLoaded', function () {
+        const quickAddForms = document.querySelectorAll('.quick-add-form');
+
+        quickAddForms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                const button = this.querySelector('.quick-add');
+                const productCard = this.closest('.product-card');
+                const productImage = productCard.querySelector('img');
+
+                // Create flying image
+                const flyingImg = document.createElement('img');
+                flyingImg.src = productImage.src;
+                flyingImg.className = 'cart-item-flying';
+
+                // Position at product image
+                const rect = productImage.getBoundingClientRect();
+                flyingImg.style.position = 'fixed';
+                flyingImg.style.left = rect.left + 'px';
+                flyingImg.style.top = rect.top + 'px';
+                flyingImg.style.width = rect.width + 'px';
+                flyingImg.style.height = rect.height + 'px';
+                flyingImg.style.objectFit = 'cover';
+                flyingImg.style.borderRadius = '12px';
+                flyingImg.style.zIndex = '9999';
+
+                document.body.appendChild(flyingImg);
+
+                // Remove after animation
+                setTimeout(() => {
+                    flyingImg.remove();
+                }, 800);
+
+                // Pulse cart icon
+                const cartLink = document.querySelector('.cart-link');
+                if (cartLink) {
+                    cartLink.classList.add('cart-pulse');
+                    setTimeout(() => {
+                        cartLink.classList.remove('cart-pulse');
+                    }, 300);
+                }
+
+                const formData = new FormData(this);
+
+                fetch(this.action, {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => {
+                        if (response.ok) {
+                            showToast('✓ Added to cart!', 'success');
+
+                            // Fetch updated cart count from server
+                            fetch('/api/cart-count')
+                                .then(res => res.json())
+                                .then(data => {
+                                    const cartLink = document.querySelector('.cart-link');
+                                    if (cartLink) {
+                                        let badge = document.getElementById('cart-badge');
+
+                                        if (data.count > 0) {
+                                            if (badge) {
+                                                // Update existing badge
+                                                badge.textContent = data.count;
+                                                badge.classList.add('cart-badge-update');
+                                                setTimeout(() => {
+                                                    badge.classList.remove('cart-badge-update');
+                                                }, 500);
+                                            } else {
+                                                // Create new badge
+                                                badge = document.createElement('span');
+                                                badge.className = 'cart-badge';
+                                                badge.id = 'cart-badge';
+                                                badge.textContent = data.count;
+                                                cartLink.appendChild(badge);
+                                            }
+                                        } else {
+                                            // If count is 0, remove badge if it exists
+                                            if (badge) {
+                                                badge.remove();
+                                            }
+                                        }
+                                    }
+                                })
+                                .catch(err => console.error('Error fetching cart count:', err));
+
+                            // Button success feedback
+                            const originalHTML = button.innerHTML;
+                            button.innerHTML = '<i class="fas fa-check"></i>';
+                            button.style.background = '#10b981';
+
+                            setTimeout(() => {
+                                button.innerHTML = originalHTML;
+                                button.style.background = '';
+                            }, 1500);
+                        } else {
+                            showToast('Error adding to cart', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showToast('Error adding to cart', 'error');
+                    });
+            });
+        });
+
+        // Delete product confirmation
+        const deleteForms = document.querySelectorAll('.delete-form');
+        deleteForms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const productName = this.dataset.productName;
+
+                if (confirm(`Are you sure you want to delete "${productName}"?`)) {
+                    this.submit();
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}

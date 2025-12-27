@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout - BuyMo{% endblock %}
+
+{% block extra_css %}
+<style>
+    .checkout-container {
+        max-width: 1200px;
+        margin: 24px auto;
+        padding: 0 16px;
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 24px;
+    }
+    
+    .checkout-form {
+        background: white;
+        border-radius: 19px;
+        padding: 32px;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .checkout-form h2 {
+        color: #1f2937;
+        font-weight: 700;
+        margin-bottom: 24px;
+    }
+    
+    .delivery-toggle {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 32px;
+    }
+    
+    .delivery-option {
+        padding: 20px;
+        border: 2px solid #e5e7eb;
+        border-radius: 15px;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-align: center;
+    }
+    
+    .delivery-option input[type="radio"] {
+        display: none;
+    }
+    
+    .delivery-option:hover {
+        border-color: var(--opus-green);
+        background: #f0fdf4;
+    }
+    
+    .delivery-option input[type="radio"]:checked + label {
+        border-color: var(--opus-green);
+        background: #f0fdf4;
+    }
+    
+    .delivery-option.active {
+        border-color: var(--opus-green);
+        background: #f0fdf4;
+    }
+    
+    .delivery-option .icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+    
+    .delivery-option .title {
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 4px;
+    }
+    
+    .delivery-option .price {
+        color: #6b7280;
+        font-size: 14px;
+    }
+    
+    .form-section {
+        margin-bottom: 32px;
+    }
+    
+    .form-section h3 {
+        color: #1f2937;
+        font-weight: 600;
+        margin-bottom: 16px;
+        font-size: 18px;
+    }
+    
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+    
+    .form-group label .required {
+        color: #ef4444;
+    }
+    
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        font-size: 16px;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--opus-green);
+        box-shadow: 0 0 0 3px rgba(7, 104, 80, 0.1);
+    }
+    
+    #address-section, #pickup-section {
+        display: none;
+    }
+    
+    .pickup-info {
+        background: #f9fafb;
+        padding: 16px;
+        border-radius: 12px;
+        margin-bottom: 16px;
+    }
+    
+    .pickup-info h4 {
+        color: #1f2937;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    
+    .pickup-info p {
+        color: #6b7280;
+        font-size: 14px;
+        margin: 4px 0;
+    }
+    
+    .order-summary {
+        background: white;
+        border-radius: 19px;
+        padding: 24px;
+        border: 1px solid #e5e7eb;
+        height: fit-content;
+        position: sticky;
+        top: 100px;
+    }
+    
+    .order-summary h3 {
+        color: #1f2937;
+        font-weight: 700;
+        margin-bottom: 20px;
+    }
+    
+    .summary-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        color: #6b7280;
+    }
+    
+    .summary-item.total {
+        border-top: 2px solid #e5e7eb;
+        padding-top: 12px;
+        margin-top: 12px;
+        font-weight: 700;
+        color: #1f2937;
+        font-size: 18px;
+    }
+    
+    .free-delivery-banner {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        padding: 12px 16px;
+        border-radius: 12px;
+        margin-bottom: 16px;
+        text-align: center;
+        color: var(--opus-green);
+        font-weight: 600;
+    }
+    
+    .btn-checkout {
+        width: 100%;
+        padding: 16px;
+        background: var(--opus-green);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .btn-checkout:hover {
+        background: var(--opus-green-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(7, 104, 80, 0.2);
+    }
+    
+    @media (max-width: 968px) {
+        .checkout-container {
+            grid-template-columns: 1fr;
+        }
+        .order-summary {
+            position: static;
+        }
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="checkout-container">
+    <div class="checkout-form">
+        <h2><i class="fas fa-shopping-bag"></i> Checkout</h2>
+        
+        <form method="POST" action="{{ url_for('checkout') }}" id="checkout-form">
+            <!-- Delivery Method -->
+            <div class="form-section">
+                <h3>Step 1: Delivery Method</h3>
+                <div class="delivery-toggle">
+                    <div class="delivery-option active" data-method="delivery">
+                        <input type="radio" name="delivery_method" value="delivery" id="delivery" checked>
+                        <label for="delivery">
+                            <div class="icon">🚚</div>
+                            <div class="title">Home Delivery</div>
+                            <div class="price" id="delivery-price-text">R50.00</div>
+                        </label>
+                    </div>
+                    <div class="delivery-option" data-method="pickup">
+                        <input type="radio" name="delivery_method" value="pickup" id="pickup">
+                        <label for="pickup">
+                            <div class="icon">🏪</div>
+                            <div class="title">Store Pickup</div>
+                            <div class="price">FREE</div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Contact Information -->
+            <div class="form-section">
+                <h3>Step 2: Contact Information</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Full Name <span class="required">*</span></label>
+                        <input type="text" name="full_name" value="{{ last_order.full_name if last_order else '' }}" required placeholder="John Doe">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number <span class="required">*</span></label>
+                        <input type="tel" name="phone" value="{{ last_order.phone if last_order else '' }}" required placeholder="082 123 4567">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" name="email" value="{{ current_user.email }}" readonly style="background: #f9fafb;">
+                </div>
+            </div>
+            
+            <!-- Delivery Address -->
+            <div class="form-section" id="address-section">
+                <h3>Step 3: Delivery Address</h3>
+                <div class="form-group">
+                    <label>Street Address <span class="required">*</span></label>
+                    <input type="text" name="street_address" value="{{ last_order.street_address if last_order else '' }}" placeholder="123 Main Street">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Suburb/Area <span class="required">*</span></label>
+                        <input type="text" name="suburb" value="{{ last_order.suburb if last_order else '' }}" placeholder="Braamfontein">
+                    </div>
+                    <div class="form-group">
+                        <label>City <span class="required">*</span></label>
+                        <input type="text" name="city" value="{{ last_order.city if last_order else '' }}" placeholder="Johannesburg">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Province <span class="required">*</span></label>
+                        <select name="province">
+                            <option value="">Select Province</option>
+                            <option value="Eastern Cape" {% if last_order and last_order.province == 'Eastern Cape' %}selected{% endif %}>Eastern Cape</option>
+                            <option value="Free State" {% if last_order and last_order.province == 'Free State' %}selected{% endif %}>Free State</option>
+                            <option value="Gauteng" {% if last_order and last_order.province == 'Gauteng' %}selected{% endif %}>Gauteng</option>
+                            <option value="KwaZulu-Natal" {% if last_order and last_order.province == 'KwaZulu-Natal' %}selected{% endif %}>KwaZulu-Natal</option>
+                            <option value="Limpopo" {% if last_order and last_order.province == 'Limpopo' %}selected{% endif %}>Limpopo</option>
+                            <option value="Mpumalanga" {% if last_order and last_order.province == 'Mpumalanga' %}selected{% endif %}>Mpumalanga</option>
+                            <option value="Northern Cape" {% if last_order and last_order.province == 'Northern Cape' %}selected{% endif %}>Northern Cape</option>
+                            <option value="North West" {% if last_order and last_order.province == 'North West' %}selected{% endif %}>North West</option>
+                            <option value="Western Cape" {% if last_order and last_order.province == 'Western Cape' %}selected{% endif %}>Western Cape</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Postal Code <span class="required">*</span></label>
+                        <input type="text" name="postal_code" value="{{ last_order.postal_code if last_order else '' }}" placeholder="2001" maxlength="4">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pickup Information -->
+            <div class="form-section" id="pickup-section">
+                <h3>Step 3: Pickup Details</h3>
+                <div class="pickup-info">
+                    <h4><i class="fas fa-map-marker-alt"></i> BuyMo Store - Braam Bankcity</h4>
+                    <p><i class="fas fa-location-dot"></i> Bank City, Braamfontein, Johannesburg</p>
+                    <p><i class="fas fa-clock"></i> Mon-Fri: 9AM-5PM | Sat: 9AM-2PM</p>
+                </div>
+                <div class="form-group">
+                    <label>Preferred Pickup Date <span class="required">*</span></label>
+                    <input type="date" name="pickup_date" min="{{ today }}">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-checkout">
+                <i class="fas fa-lock"></i> Continue to Payment
+            </button>
+        </form>
+    </div>
+    
+    <div class="order-summary">
+        <h3>Order Summary</h3>
+        
+        <div id="free-delivery-notice"></div>
+        
+        {% for item in cart_items %}
+        <div class="summary-item">
+            <span>{{ item[2] }} x{{ item[5] }}</span>
+            <span>{{ (item[3] * item[5])|zar }}</span>
+        </div>
+        {% endfor %}
+        
+        <div class="summary-item">
+            <span>Subtotal ({{ cart_items|length }} items)</span>
+            <span id="subtotal">{{ subtotal|zar }}</span>
+        </div>
+        <div class="summary-item">
+            <span>Delivery Fee</span>
+            <span id="delivery-fee">{{ delivery_fee|zar }}</span>
+        </div>
+        <div class="summary-item total">
+            <span>Total</span>
+            <span id="total">{{ (subtotal + delivery_fee)|zar }}</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const subtotal = {{ subtotal }};
+const FREE_DELIVERY_THRESHOLD = 1000;
+const DELIVERY_FEE = 50;
+
+// Delivery method toggle
+document.querySelectorAll('.delivery-option').forEach(option => {
+    option.addEventListener('click', function() {
+        document.querySelectorAll('.delivery-option').forEach(opt => opt.classList.remove('active'));
+        this.classList.add('active');
+        this.querySelector('input[type="radio"]').checked = true;
+        
+        const method = this.dataset.method;
+        if (method === 'delivery') {
+            document.getElementById('address-section').style.display = 'block';
+            document.getElementById('pickup-section').style.display = 'none';
+            updateDeliveryFee();
+        } else {
+            document.getElementById('address-section').style.display = 'none';
+            document.getElementById('pickup-section').style.display = 'block';
+            document.getElementById('delivery-fee').textContent = 'FREE';
+            document.getElementById('total').textContent = formatZAR(subtotal);
+            document.getElementById('free-delivery-notice').innerHTML = '';
+        }
+    });
+});
+
+function updateDeliveryFee() {
+    let fee = 0;
+    let noticeHTML = '';
+    
+    if (subtotal < FREE_DELIVERY_THRESHOLD) {
+        fee = DELIVERY_FEE;
+        const needed = FREE_DELIVERY_THRESHOLD - subtotal;
+        noticeHTML = `<div class="free-delivery-banner">
+            🎉 Add ${formatZAR(needed)} more for FREE delivery!
+        </div>`;
+        document.getElementById('delivery-price-text').textContent = 'R50.00';
+    } else {
+        fee = 0;
+        noticeHTML = `<div class="free-delivery-banner">
+            ✅ You qualify for FREE delivery!
+        </div>`;
+        document.getElementById('delivery-price-text').textContent = 'FREE';
+    }
+    
+    document.getElementById('delivery-fee').textContent = formatZAR(fee);
+    document.getElementById('total').textContent = formatZAR(subtotal + fee);
+    document.getElementById('free-delivery-notice').innerHTML = noticeHTML;
+}
+
+function formatZAR(amount) {
+    return 'R' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('address-section').style.display = 'block';
+    updateDeliveryFee();
+});
+
+// Form validation
+document.getElementById('checkout-form').addEventListener('submit', function(e) {
+    const method = document.querySelector('input[name="delivery_method"]:checked').value;
+    
+    if (method === 'delivery') {
+        const required = ['full_name', 'phone', 'street_address', 'suburb', 'city', 'province', 'postal_code'];
+        for (let field of required) {
+            const input = document.querySelector(`[name="${field}"]`);
+            if (!input.value.trim()) {
+                e.preventDefault();
+                input.focus();
+                showToast('Please fill in all required fields', 'error');
+                return;
+            }
+        }
+    } else {
+        const required = ['full_name', 'phone', 'pickup_date'];
+        for (let field of required) {
+            const input = document.querySelector(`[name="${field}"]`);
+            if (!input.value.trim()) {
+                e.preventDefault();
+                input.focus();
+                showToast('Please fill in all required fields', 'error');
+                return;
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

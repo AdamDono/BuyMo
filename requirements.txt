@@ -5,3 +5,4 @@ Werkzeug>=3.0.0  # Loosen to allow latest compatible version
 requests==2.31.0
 gunicorn==21.2.0
 python-dotenv==1.0.0
+cloudinary==1.36.0

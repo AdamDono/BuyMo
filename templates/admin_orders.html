@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Orders - Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-orders-container {
+        max-width: 1400px;
+        margin: 24px auto;
+        padding: 0 16px;
+    }
+    
+    .admin-header {
+        background: linear-gradient(135deg, var(--opus-green) 0%, #065c46 100%);
+        color: white;
+        padding: 40px;
+        border-radius: 19px;
+        margin-bottom: 32px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(8, 145, 107, 0.15);
+    }
+    
+    .admin-header h2 {
+        margin: 0 0 8px 0;
+        font-weight: 700;
+        font-size: 2.2rem;
+    }
+    
+    .admin-header p {
+        margin: 0;
+        opacity: 0.95;
+        font-size: 1rem;
+    }
+    
+    .orders-table-container {
+        background: white;
+        border-radius: 19px;
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    
+    .orders-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .orders-table thead {
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        border-bottom: 2px solid var(--opus-green);
+    }
+    
+    .orders-table th {
+        padding: 18px 16px;
+        text-align: left;
+        font-weight: 700;
+        color: #1f2937;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .orders-table td {
+        padding: 18px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        color: #374151;
+        vertical-align: middle;
+    }
+    
+    .orders-table tbody tr {
+        transition: all 0.2s;
+    }
+    
+    .orders-table tbody tr:hover {
+        background: linear-gradient(90deg, #f0fdf4 0%, #f9fafb 100%);
+        transform: scale(1.002);
+    }
+    
+    .order-id {
+        font-weight: 700;
+        color: var(--opus-green);
+        font-size: 1.05rem;
+    }
+    
+    .customer-name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+    
+    .customer-info {
+        font-size: 0.85rem;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+    
+    .status-select {
+        padding: 8px 14px;
+        border: 2px solid transparent;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-select:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .status-select.processing {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        color: #1e40af;
+        border-color: #93c5fd;
+    }
+    
+    .status-select.shipped {
+        background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%);
+        color: #6b21a8;
+        border-color: #c084fc;
+    }
+    
+    .status-select.delivered {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        color: #065f46;
+        border-color: #6ee7b7;
+    }
+    
+    .btn-update {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+    }
+    
+    .btn-update:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+    
+    .delivery-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #f3f4f6;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    
+    .no-orders {
+        background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+        padding: 80px 20px;
+        border-radius: 19px;
+        text-align: center;
+        border: 2px dashed #e5e7eb;
+    }
+    
+    .no-orders i {
+        font-size: 5rem;
+        color: #d1d5db;
+        margin-bottom: 24px;
+        opacity: 0.5;
+    }
+    
+    .no-orders h3 {
+        color: #1f2937;
+        font-weight: 700;
+        margin-bottom: 12px;
+    }
+    
+    .no-orders p {
+        color: #6b7280;
+    }
+    
+    @media (max-width: 968px) {
+        .orders-table-container {
+            overflow-x: auto;
+        }
+        .admin-header {
+            padding: 28px 20px;
+        }
+        .admin-header h2 {
+            font-size: 1.6rem;
+        }
+        .orders-table th,
+        .orders-table td {
+            padding: 12px 10px;
+            font-size: 0.85rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-orders-container">
+    <div class="admin-header">
+        <h2><i class="fas fa-tasks"></i> Manage Orders</h2>
+        <p>View and update order statuses</p>
+    </div>
+
+    {% if orders %}
+    <div class="orders-table-container">
+        <table class="orders-table">
+            <thead>
+                <tr>
+                    <th>Order #</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>Delivery</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td><span class="order-id">#{{ order.id }}</span></td>
+                    <td>
+                        <div class="customer-name">{{ order.customer_name }}</div>
+                        <div class="customer-info">{{ order.customer_email }}</div>
+                    </td>
+                    <td>{{ order.order_date.strftime('%b %d, %Y') }}</td>
+                    <td><strong style="color: #1f2937;">{{ order.total_amount|zar }}</strong></td>
+                    <td>
+                        {% if order.delivery_method == 'delivery' %}
+                            <span class="delivery-badge">
+                                <i class="fas fa-truck"></i> Delivery
+                            </span>
+                        {% else %}
+                            <span class="delivery-badge">
+                                <i class="fas fa-store"></i> Pickup
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin_update_order_status', order_id=order.id) }}" style="display: inline;">
+                            <select name="status" class="status-select {{ order.status }}" onchange="this.form.submit()">
+                                <option value="processing" {% if order.status == 'processing' %}selected{% endif %}>Processing</option>
+                                <option value="shipped" {% if order.status == 'shipped' %}selected{% endif %}{% if order.status == 'processing' %}{% else %} disabled{% endif %}>Shipped</option>
+                                <option value="delivered" {% if order.status == 'delivered' %}selected{% endif %}{% if order.status == 'shipped' %}{% else %} disabled{% endif %}>Delivered</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        <button onclick="viewOrderDetails({{ order.id }})" class="btn-update" style="background: #3b82f6;">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="background: white; padding: 60px 20px; border-radius: 19px; text-align: center; border: 1px solid #e5e7eb;">
+        <i class="fas fa-inbox" style="font-size: 4rem; color: #d1d5db; margin-bottom: 20px;"></i>
+        <h3>No Orders Yet</h3>
+        <p style="color: #6b7280;">Orders will appear here once customers start purchasing.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Order Details Modal -->
+<div id="orderModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 19px; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; padding: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px;">
+            <h3 style="margin: 0; color: #1f2937;">Order Details</h3>
+            <button onclick="closeModal()" style="background: none; border: none; font-size: 32px; cursor: pointer; color: #6b7280;">&times;</button>
+        </div>
+        <div id="orderDetails" style="color: #374151;"></div>
+    </div>
+</div>
+
+<script>
+function viewOrderDetails(orderId) {
+    // Fetch order details via AJAX
+    fetch(`/admin/order/${orderId}/details`)
+        .then(response => response.json())
+        .then(data => {
+            const modal = document.getElementById('orderModal');
+            const detailsDiv = document.getElementById('orderDetails');
+            
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: var(--opus-green); margin-bottom: 12px;">📦 Order #${data.id}</h4>
+                    <p style="margin: 4px 0;"><strong>Date:</strong> ${data.order_date}</p>
+                    <p style="margin: 4px 0;"><strong>Customer:</strong> ${data.customer_name} (${data.customer_email})</p>
+                    <p style="margin: 4px 0;"><strong>Status:</strong> <span style="text-transform: capitalize; color: #3b82f6; font-weight: 600;">${data.status}</span></p>
+                </div>
+                
+                <div style="background: #f0fdf4; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="color: var(--opus-green); margin-bottom: 12px;">${data.delivery_method === 'delivery' ? '🚚 Delivery Address' : '🏪 Store Pickup'}</h4>
+                    ${data.delivery_method === 'delivery' ? `
+                        <p style="margin: 4px 0;"><strong>Name:</strong> ${data.full_name || 'N/A'}</p>
+                        <p style="margin: 4px 0;"><strong>Phone:</strong> ${data.phone || 'N/A'}</p>
+                        <p style="margin: 4px 0;"><strong>Address:</strong> ${data.street_address || 'N/A'}, ${data.suburb || ''}</p>
+                        <p style="margin: 4px 0;">${data.city || ''}, ${data.province || ''} ${data.postal_code || ''}</p>
+                        <p style="margin: 4px 0;"><strong>Delivery Fee:</strong> ${data.delivery_fee > 0 ? 'R' + data.delivery_fee.toFixed(2) : 'FREE'}</p>
+                    ` : `
+                        <p style="margin: 4px 0;"><strong>Name:</strong> ${data.full_name || 'N/A'}</p>
+                        <p style="margin: 4px 0;"><strong>Phone:</strong> ${data.phone || 'N/A'}</p>
+                        <p style="margin: 4px 0;">BuyMo Store - Bank City, Braamfontein</p>
+                        ${data.pickup_date ? `<p style="margin: 4px 0;"><strong>Pickup Date:</strong> ${data.pickup_date}</p>` : ''}
+                    `}
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #1f2937; margin-bottom: 12px;">📋 Items Ordered</h4>
+                    ${data.items.map(item => `
+                        <div style="display: flex; gap: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px;">
+                            ${item.image ? `<img src="/static/${item.image}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;">` : '<div style="width: 50px; height: 50px; background: #e5e7eb; border-radius: 6px;"></div>'}
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600;">${item.name}</div>
+                                <div style="color: #6b7280; font-size: 0.9rem;">Qty: ${item.quantity} × R${item.price.toFixed(2)} = R${(item.quantity * item.price).toFixed(2)}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div style="border-top: 2px solid #e5e7eb; padding-top: 16px;">
+                    <h3 style="text-align: right; color: #1f2937; margin: 0;">Total: R${data.total_amount.toFixed(2)}</h3>
+                </div>
+            `;
+            
+            detailsDiv.innerHTML = html;
+            modal.style.display = 'flex';
+        })
+        .catch(error => {
+            console.error('Error fetching order details:', error);
+            alert('Failed to load order details');
+        });
+}
+
+function closeModal() {
+    document.getElementById('orderModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+document.getElementById('orderModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeModal();
+    }
+});
+</script>
+{% endblock %}

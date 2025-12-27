@@ -2,145 +2,277 @@
 
 {% block title %}Order History{% endblock %}
 
-{% block content %}
+{% block extra_css %}
 <style>
-    .pending-orders-header {
-        background: linear-gradient(90deg, #1a1a1a, #2c3e50);
-        color: #ffffff;
-        padding: 20px;
-        border-radius: 10px 10px 0 0;
-        margin-bottom: 20px;
-        margin-top: 120px; /* Reduced from 790px for better spacing */
+    .orders-container {
+        max-width: 1200px;
+        margin: 24px auto;
+        padding: 0 16px;
     }
-    .pending-orders-header h2 {
-        margin: 0;
+
+    .orders-header {
+        background: linear-gradient(135deg, var(--opus-green) 0%, #065c46 100%);
+        color: white;
+        padding: 32px;
+        border-radius: 19px;
+        margin-bottom: 24px;
+        text-align: center;
+    }
+
+    .orders-header h2 {
+        margin: 0 0 8px 0;
         font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+        font-size: 2rem;
     }
-    .pending-orders-header p {
-        font-size: 0.9rem;
-        opacity: 0.9;
-    }
-    .card {
-        border: none;
-        border-radius: 10px;
+
+    .order-card {
+        background: white;
+        border-radius: 19px;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 20px;
         overflow: hidden;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        transition: all 0.3s;
     }
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+
+    .order-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transform: translateY(-2px);
     }
-    .card-header {
-        background-color: #2c3e50;
-        color: #ffffff;
-        border-bottom: none;
+
+    .order-header {
+        padding: 20px 24px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
     }
-    .btn-link {
-        color: #00bcd4 !important;
-        text-decoration: none;
+
+    .order-number {
+        font-weight: 700;
+        color: #1f2937;
+        font-size: 1.1rem;
+    }
+
+    .status-badge {
+        padding: 6px 16px;
+        border-radius: 20px;
         font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
     }
-    .btn-link:hover {
-        color: #00acc1 !important;
+
+    .status-processing {
+        background: #dbeafe;
+        color: #1e40af;
     }
-    .list-group-item {
-        background-color: #ffffff;
-        border: none;
+
+    .status-shipped {
+        background: #e9d5ff;
+        color: #6b21a8;
+    }
+
+    .status-delivered {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .order-body {
+        padding: 24px;
+    }
+
+    .order-item {
         display: flex;
         align-items: center;
-        padding: 10px 15px;
+        gap: 16px;
+        padding: 12px;
+        background: #f9fafb;
+        border-radius: 12px;
+        margin-bottom: 12px;
     }
-    .img-thumbnail {
-        border: none;
-        border-radius: 5px;
-        width: 50px;
-        height: 50px;
-        object-fit: cover; /* Ensure images fit without distortion */
+
+    .order-item img {
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+        border-radius: 8px;
     }
-    .total-amount {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #2c3e50;
-    }
-    .no-orders {
-        background-color: #ffffff;
+
+    .delivery-info {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
         padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 15px;
+        margin-bottom: 20px;
     }
-    /* Mobile responsive adjustments */
-    @media (max-width: 991.98px) {
-        .main-content {
-            padding-top: 120px; /* Increased to ensure clearance below navbar */
-            padding-bottom: 20px;
+
+    .delivery-info h4 {
+        color: var(--opus-green);
+        font-weight: 700;
+        margin-bottom: 12px;
+    }
+
+    .delivery-info p {
+        margin: 4px 0;
+        color: #374151;
+        font-size: 0.9rem;
+    }
+
+    .delivery-info i {
+        color: var(--opus-green);
+        width: 20px;
+    }
+
+    .order-summary {
+        border-top: 2px solid #e5e7eb;
+        padding-top: 16px;
+    }
+
+    .order-total {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    .no-orders {
+        background: white;
+        padding: 60px 20px;
+        border-radius: 19px;
+        text-align: center;
+        border: 1px solid #e5e7eb;
+    }
+
+    .no-orders i {
+        font-size: 4rem;
+        color: #d1d5db;
+        margin-bottom: 20px;
+    }
+
+    @media (max-width: 768px) {
+        .orders-header {
+            padding: 24px 20px;
         }
-        .pending-orders-header {
-            padding: 15px;
-            margin-top: 40px; /* Adjusted for better mobile spacing */
-            margin-bottom: 15px;
+
+        .orders-header h2 {
+            font-size: 1.5rem;
         }
-        .pending-orders-header h2 {
-            font-size: 1.3rem;
-        }
-        .pending-orders-header p {
-            font-size: 0.75rem;
+
+        .order-header {
+            flex-direction: column;
+            align-items: flex-start;
         }
     }
 </style>
+{% endblock %}
 
-<div class="main-content">
-    <div class="container">
-        <div class="pending-orders-header">
-            <h2>Order History</h2>
-            <p>View your completed orders below.</p>
+{% block content %}
+
+<div class="orders-container">
+    <div class="orders-header">
+        <h2><i class="fas fa-box-open"></i> Order History</h2>
+        <p>Track and view all your orders</p>
+    </div>
+
+    {% if orders %}
+    {% for order in orders %}
+    <div class="order-card">
+        <div class="order-header">
+            <div>
+                <div class="order-number">Order #{{ order.id }}</div>
+                {% if order.tracking_number %}
+                <div style="color: #076850; font-size: 0.9rem; font-weight: 600; margin-top: 4px;">
+                    <i class="fas fa-shipping-fast"></i> Tracking: {{ order.tracking_number }}
+                </div>
+                {% endif %}
+                <div style="color: #6b7280; font-size: 0.9rem;">
+                    <i class="fas fa-calendar"></i> {{ order.order_date.strftime('%B %d, %Y at %I:%M %p') }}
+                </div>
+            </div>
+            <div>
+                {% if order.status == 'processing' %}
+                <span class="status-badge status-processing">
+                    <i class="fas fa-circle-notch fa-spin"></i> Processing
+                </span>
+                {% elif order.status == 'shipped' %}
+                <span class="status-badge status-shipped">
+                    <i class="fas fa-truck"></i> Shipped
+                </span>
+                {% elif order.status == 'delivered' %}
+                <span class="status-badge status-delivered">
+                    <i class="fas fa-check-circle"></i> Delivered
+                </span>
+                {% else %}
+                <span class="status-badge status-processing">
+                    <i class="fas fa-circle-notch"></i> {{ order.status|title }}
+                </span>
+                {% endif %}
+            </div>
         </div>
 
-        {% if orders %}
-            <div class="accordion" id="orderAccordion">
-                {% for order in orders %}
-                    <div class="card mb-4">
-                        <div class="card-header" id="heading{{ order.id }}">
-                            <h5 class="mb-0">
-                                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ order.id }}" aria-expanded="true" aria-controls="collapse{{ order.id }}">
-                                    Order #{{ order.id }} - {{ order.order_date.strftime('%Y-%m-%d %H:%M:%S') }} - <span class="total-amount">{{ order.total_amount | zar }}</span>
-                                </button>
-                            </h5>
-                        </div>
-                        <div id="collapse{{ order.id }}" class="collapse" aria-labelledby="heading{{ order.id }}" data-bs-parent="#orderAccordion">
-                            <div class="card-body">
-                                <h6>Items:</h6>
-                                <ul class="list-group">
-                                    {% for item in order.order_items %}
-                                        <li class="list-group-item d-flex align-items-center">
-                                            {% if item.image %}
-                                                <img src="{{ url_for('static', filename=item.image) }}" alt="{{ item.name }}" class="img-thumbnail me-3">
-                                            {% else %}
-                                                <div class="me-3" style="width: 50px; height: 50px; background-color: #ddd;"></div>
-                                            {% endif %}
-                                            <div>
-                                                <strong>{{ item.name }}</strong><br>
-                                                Quantity: {{ item.quantity }} | Price: {{ item.price_at_purchase | zar }}
-                                            </div>
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                                <p class="mt-3"><strong>Total:</strong> <span class="total-amount">{{ order.total_amount | zar }}</span></p>
-                            </div>
+        <div class="order-body">
+            <div class="delivery-info">
+                {% if order.delivery_method == 'delivery' %}
+                <h4><i class="fas fa-truck"></i> Delivery Address</h4>
+                <p><i class="fas fa-user"></i> {{ order.full_name }}</p>
+                <p><i class="fas fa-phone"></i> {{ order.phone }}</p>
+                <p><i class="fas fa-map-marker-alt"></i> {{ order.street_address }}, {{ order.suburb }}</p>
+                <p style="margin-left: 20px;">{{ order.city }}, {{ order.province }} {{ order.postal_code }}</p>
+                {% if order.delivery_fee > 0 %}
+                <p><i class="fas fa-shipping-fast"></i> Delivery Fee: {{ order.delivery_fee|zar }}</p>
+                {% else %}
+                <p><i class="fas fa-gift"></i> <strong>FREE Delivery!</strong></p>
+                {% endif %}
+                {% else %}
+                <h4><i class="fas fa-store"></i> Store Pickup</h4>
+                <p><i class="fas fa-user"></i> {{ order.full_name }}</p>
+                <p><i class="fas fa-phone"></i> {{ order.phone }}</p>
+                <p><i class="fas fa-map-marker-alt"></i> BuyMo Store - Bank City, Braamfontein, Johannesburg</p>
+                {% if order.pickup_date %}
+                <p><i class="fas fa-calendar-check"></i> Pickup Date: {{ order.pickup_date }}</p>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <h4 style="color: #1f2937; font-weight: 600; margin-bottom: 12px;">Items Ordered</h4>
+                {% for item in order.order_items %}
+                <div class="order-item">
+                    {% if item.image %}
+                    <img src="{{ item.image | resolve_image }}" alt="{{ item.name }}">
+                    {% else %}
+                    <div style="width: 60px; height: 60px; background: #e5e7eb; border-radius: 8px;"></div>
+                    {% endif %}
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">{{ item.name }}</div>
+                        <div style="color: #6b7280; font-size: 0.9rem;">
+                            Qty: {{ item.quantity }} × {{ item.price_at_purchase|zar }} = {{ (item.quantity *
+                            item.price_at_purchase)|zar }}
                         </div>
                     </div>
+                </div>
                 {% endfor %}
             </div>
-        {% else %}
-            <div class="no-orders">
-                <p>You have no completed orders yet. Start shopping now!</p>
-                <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg">Shop Now</a>
-            </div>
-        {% endif %}
-    </div>
-</div>
 
-<script src="{{ url_for('static', filename='js/main.js') }}"></script> <!-- Temporarily fallback to main.js -->
+            <div class="order-summary">
+                <div class="order-total">
+                    Total: {{ order.total_amount|zar }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="no-orders">
+        <i class="fas fa-shopping-bag"></i>
+        <h3>No Orders Yet</h3>
+        <p>You haven't placed any orders. Start shopping now!</p>
+        <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg">
+            <i class="fas fa-shopping-cart"></i> Start Shopping
+        </a>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}

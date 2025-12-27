@@ -2,53 +2,134 @@
 
 {% block content %}
 <div class="profile-container">
-    <h2>Your Profile</h2>
-    
+    <!-- Profile Completion Badge -->
+    <div class="profile-completion">
+        <div class="completion-circle" data-completion="{{ completion }}">
+            <svg width="80" height="80">
+                <circle cx="40" cy="40" r="35" fill="none" stroke="#e5e7eb" stroke-width="6"></circle>
+                <circle cx="40" cy="40" r="35" fill="none" stroke="#076850" stroke-width="6"
+                    stroke-dasharray="{{ (2 * 3.14159 * 35 * completion / 100)|round }}, 1000"
+                    transform="rotate(-90 40 40)"></circle>
+            </svg>
+            <div class="completion-text">{{ completion }}%</div>
+        </div>
+        <div class="completion-info">
+            <h4>Profile Completion</h4>
+            <p>{% if completion < 100 %}Add a profile photo to complete your profile!{% else %}Your profile is
+                    complete!{% endif %}</p>
+        </div>
+    </div>
+
+    <h2><i class="fas fa-user-circle"></i> Your Profile</h2>
+
     <form method="POST" enctype="multipart/form-data" class="profile-form">
         <div class="profile-picture">
-            <img src="{{ url_for('static', filename=user[4] if user[4] else 'uploads/profiles/default-profile.png') }}" 
-                 id="profile-preview">
+            <img src="{{ user[4] | resolve_image }}" id="profile-preview" alt="Profile Picture">
             <label for="profile-upload" class="upload-btn">
                 <i class="fas fa-camera"></i> Change Photo
                 <input type="file" id="profile-upload" name="profile_image" accept="image/*">
             </label>
         </div>
-        
+
         <div class="form-group">
-            <label for="username">Username</label>
-            <input type="text" id="username" name="username" value="{{ user[1] }}" required>
+            <label for="username"><i class="fas fa-user"></i> Username</label>
+            <input type="text" id="username" name="username" value="{{ user[1] }}" required class="form-control">
         </div>
-        
+
         <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" value="{{ user[2] }}" required>
+            <label for="email"><i class="fas fa-envelope"></i> Email</label>
+            <input type="email" id="email" name="email" value="{{ user[2] }}" required class="form-control">
         </div>
-        
+
         <div class="form-group">
-            <label>Member Since</label>
-            <p>{{ user[3].strftime('%B %d, %Y') }}</p>
+            <label><i class="fas fa-calendar-alt"></i> Member Since</label>
+            <p class="member-since">{{ user[3].strftime('%B %d, %Y') }}</p>
         </div>
-        
-        <button type="submit" class="btn-save">Save Changes</button>
+
+        <button type="submit" class="btn-save">
+            <i class="fas fa-save"></i> Save Changes
+        </button>
     </form>
-    
+
     <div class="password-change-form">
-        <h3>Change Password</h3>
+        <h3><i class="fas fa-lock"></i> Change Password</h3>
         <form method="POST" action="{{ url_for('change_password') }}">
             <div class="form-group">
-                <label>Current Password:</label>
-                <input type="password" name="current_password" required>
+                <label><i class="fas fa-key"></i> Current Password</label>
+                <input type="password" name="current_password" required class="form-control"
+                    placeholder="Enter current password">
             </div>
             <div class="form-group">
-                <label>New Password:</label>
-                <input type="password" name="new_password" required>
+                <label><i class="fas fa-lock"></i> New Password</label>
+                <input type="password" name="new_password" required class="form-control"
+                    placeholder="At least 8 characters">
             </div>
             <div class="form-group">
-                <label>Confirm New Password:</label>
-                <input type="password" name="confirm_password" required>
+                <label><i class="fas fa-check-circle"></i> Confirm New Password</label>
+                <input type="password" name="confirm_password" required class="form-control"
+                    placeholder="Re-enter new password">
             </div>
-            <button type="submit" class="btn btn-primary">Update Password</button>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-shield-alt"></i> Update Password
+            </button>
         </form>
+    </div>
+
+    <!-- Order History Section -->
+    <div class="order-history-section" style="margin-top: 40px;">
+        <h3><i class="fas fa-box-open"></i> Order History</h3>
+        {% if orders %}
+        <div class="table-responsive">
+            <table class="table table-hover orders-table">
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Date</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Tracking</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td>#{{ order[0] }}</td>
+                        <td>{{ order[3].strftime('%d %b %Y') }}</td>
+                        <td>{{ order[1] | zar }}</td>
+                        <td>
+                            <span class="badge 
+                                    {% if order[2] == 'delivered' %}bg-success
+                                    {% elif order[2] == 'shipped' %}bg-primary
+                                    {% elif order[2] == 'cancelled' %}bg-danger
+                                    {% else %}bg-warning text-dark{% endif %}">
+                                {{ order[2] | title }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if order[4] %}
+                            <span class="tracking-number">
+                                <i class="fas fa-barcode"></i> {{ order[4] }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-shopping-bag"></i>
+            <p>You haven't placed any orders yet.</p>
+            <a href="{{ url_for('home') }}" class="btn btn-primary">Start Shopping</a>
+        </div>
+        {% endif %}
     </div>
 </div>
 
