@@ -2,35 +2,25 @@ import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
-from psycopg2 import pool
-
-# Create a connection pool
-_pool = None
-
 def get_db_connection():
-    global _pool
     db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
     if db_url.startswith('postgres://'):
         db_url = db_url.replace('postgres://', 'postgresql://', 1)
-        
-    if _pool is None:
-        from urllib.parse import urlparse
-        url = urlparse(db_url)
-        _pool = pool.SimpleConnectionPool(
-            1, 20,
-            dbname=url.path[1:],
-            user=url.username,
-            password=url.password,
-            host=url.hostname,
-            port=url.port or 5432
-        )
-    
-    return _pool.getconn()
+    from urllib.parse import urlparse
+    url = urlparse(db_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port or 5432
+    )
+    return conn
 
 def return_db_connection(conn):
-    """Return connection to the pool"""
-    if _pool and conn:
-        _pool.putconn(conn)
+    """Legacy compatibility - just close the connection"""
+    if conn:
+        conn.close()
 
 def create_user(username, email, password):
     conn = get_db_connection()
