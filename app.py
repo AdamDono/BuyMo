@@ -104,20 +104,31 @@ def generate_tracking_number():
 
 @app.context_processor
 def inject_cart_count():
-    """Make cart count available to all templates"""
+    """Make cart count available to all templates with caching"""
     cart_count = 0
     if current_user.is_authenticated:
-        try:
-            conn = database.get_db_connection()
-            cur = conn.cursor()
-            cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
-            cart_count = cur.fetchone()[0]
-            cur.close()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Error fetching cart count: {str(e)}")
-            cart_count = 0
+        # Use session cache to avoid DB query on every request
+        cache_key = f'cart_count_{current_user.id}'
+        
+        # Check if we have a cached value in session
+        if cache_key in session:
+            cart_count = session[cache_key]
+        else:
+            # Only query DB if not cached
+            try:
+                conn = database.get_db_connection()
+                cur = conn.cursor()
+                cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
+                cart_count = cur.fetchone()[0]
+                cur.close()
+                conn.close()
+                # Cache for this session
+                session[cache_key] = cart_count
+            except Exception as e:
+                logger.error(f"Error fetching cart count: {str(e)}")
+                cart_count = 0
     return dict(cart_count=cart_count)
+
 
 
 # Routes
@@ -510,6 +521,11 @@ def add_to_cart(product_id):
             ''', (current_user.id, product_id, quantity))
 
         conn.commit()
+        
+        # Clear cart count cache
+        cache_key = f'cart_count_{current_user.id}'
+        session.pop(cache_key, None)
+        
         flash('Product added to cart!', 'success')
     except Exception as e:
         logger.error(f"Error adding to cart: {str(e)}")
@@ -872,6 +888,11 @@ def remove_from_cart(item_id):
         
         if cur.fetchone():
             conn.commit()
+            
+            # Clear cart count cache
+            cache_key = f'cart_count_{current_user.id}'
+            session.pop(cache_key, None)
+            
             flash('Item removed from cart', 'success')
         else:
             flash('Item not found in your cart', 'error')
