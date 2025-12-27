@@ -2,20 +2,35 @@ import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
+from psycopg2 import pool
+
+# Create a connection pool
+_pool = None
+
 def get_db_connection():
+    global _pool
     db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
     if db_url.startswith('postgres://'):
         db_url = db_url.replace('postgres://', 'postgresql://', 1)
-    from urllib.parse import urlparse
-    url = urlparse(db_url)
-    conn = psycopg2.connect(
-        dbname=url.path[1:],
-        user=url.username,
-        password=url.password,
-        host=url.hostname,
-        port=url.port or 5432
-    )
-    return conn
+        
+    if _pool is None:
+        from urllib.parse import urlparse
+        url = urlparse(db_url)
+        _pool = pool.SimpleConnectionPool(
+            1, 20,
+            dbname=url.path[1:],
+            user=url.username,
+            password=url.password,
+            host=url.hostname,
+            port=url.port or 5432
+        )
+    
+    return _pool.getconn()
+
+def return_db_connection(conn):
+    """Return connection to the pool"""
+    if _pool and conn:
+        _pool.putconn(conn)
 
 def create_user(username, email, password):
     conn = get_db_connection()
@@ -31,7 +46,7 @@ def create_user(username, email, password):
     )
     conn.commit()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
 
 def get_user_by_email(email):
     conn = get_db_connection()
@@ -39,7 +54,7 @@ def get_user_by_email(email):
     cur.execute('SELECT * FROM users WHERE email = %s;', (email,))
     user = cur.fetchone()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
     return user
 
 def create_tables():
@@ -168,9 +183,17 @@ def create_tables():
         );
     ''')
     
+    # Create indexes for better performance
+    cur.execute('''
+        CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+        CREATE INDEX IF NOT EXISTS idx_cart_user ON cart_items(user_id);
+        CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+        CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+    ''')
+
     conn.commit()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
 
 def get_user_details(user_id):
     conn = get_db_connection()
@@ -182,7 +205,7 @@ def get_user_details(user_id):
     ''', (user_id,))
     user = cur.fetchone()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
     return user
 
 def get_user_by_id(user_id):
@@ -191,7 +214,7 @@ def get_user_by_id(user_id):
     cur.execute('SELECT * FROM users WHERE id = %s', (user_id,))
     user = cur.fetchone()
     cur.close()
-    conn.close()
+    return_db_connection(conn)
     return user
 
 def update_user_profile(user_id, username, email, profile_image=None):
@@ -211,7 +234,7 @@ def update_user_profile(user_id, username, email, profile_image=None):
         return False
     finally:
         cur.close()
-        conn.close()
+        return_db_connection(conn)
 
 def update_user_password(user_id, new_password_hash):
     conn = get_db_connection()
@@ -226,7 +249,8 @@ def update_user_password(user_id, new_password_hash):
         return False
     finally:
         cur.close()
-        conn.close()
+        return_db_connection(conn)
+
 
 # Call the function to create tables
 create_tables()

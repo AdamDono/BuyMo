@@ -483,7 +483,8 @@
                     </div>
                     {% endif %}
 
-                    <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" class="product-image">
+                    <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" class="product-image"
+                        loading="lazy">
                     <div class="product-info">
                         <div class="product-name">{{ product[1] }}</div>
                         <div class="product-price">{{ product[2] | zar }}</div>

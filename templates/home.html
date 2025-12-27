@@ -73,7 +73,7 @@
                             {% endif %}
                             {% endif %}
 
-                            <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}">
+                            <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" loading="lazy">
                             <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}"
                                 class="quick-add-form">
                                 <input type="hidden" name="quantity" value="1" />

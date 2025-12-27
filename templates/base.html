@@ -22,6 +22,12 @@
         {% block content %}{% endblock %}
     </main>
 
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
     <!-- Global Toast Notification -->
     <div id="global-toast" class="toast-notification" role="alert" aria-live="polite">
         <i class="fas fa-check-circle"></i>
@@ -64,6 +70,36 @@
             {% endfor %}
             {% endif %}
             {% endwith %}
+
+            // Loading indicator logic
+            const loader = document.getElementById('loading-overlay');
+
+            // Show loader on link clicks (except specific ones)
+            document.addEventListener('click', function (e) {
+                const link = e.target.closest('a');
+                if (link && !link.target && !link.hasAttribute('download') &&
+                    !link.href.startsWith('javascript') && !link.href.includes('#')) {
+                    // Don't show for same page anchor links
+                    if (link.href !== window.location.href) {
+                        loader.classList.add('show');
+                    }
+                }
+            });
+
+            // Show loader on form submit
+            document.addEventListener('submit', function (e) {
+                const form = e.target;
+                if (!form.hasAttribute('target')) {
+                    loader.classList.add('show');
+                }
+            });
+
+            // Hide loader when page is fully loaded (back button support)
+            window.addEventListener('pageshow', function (event) {
+                if (event.persisted) {
+                    loader.classList.remove('show');
+                }
+            });
         });
     </script>
     {% block extra_js %}{% endblock %}
