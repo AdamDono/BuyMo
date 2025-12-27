@@ -74,6 +74,63 @@
             </button>
         </form>
     </div>
+
+    <!-- Order History Section -->
+    <div class="order-history-section" style="margin-top: 40px;">
+        <h3><i class="fas fa-box-open"></i> Order History</h3>
+        {% if orders %}
+        <div class="table-responsive">
+            <table class="table table-hover orders-table">
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Date</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Tracking</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td>#{{ order[0] }}</td>
+                        <td>{{ order[3].strftime('%d %b %Y') }}</td>
+                        <td>{{ order[1] | zar }}</td>
+                        <td>
+                            <span class="badge 
+                                    {% if order[2] == 'delivered' %}bg-success
+                                    {% elif order[2] == 'shipped' %}bg-primary
+                                    {% elif order[2] == 'cancelled' %}bg-danger
+                                    {% else %}bg-warning text-dark{% endif %}">
+                                {{ order[2] | title }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if order[4] %}
+                            <span class="tracking-number">
+                                <i class="fas fa-barcode"></i> {{ order[4] }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-shopping-bag"></i>
+            <p>You haven't placed any orders yet.</p>
+            <a href="{{ url_for('home') }}" class="btn btn-primary">Start Shopping</a>
+        </div>
+        {% endif %}
+    </div>
 </div>
 
 <script src="{{ url_for('static', filename='js/profile.js') }}"></script>

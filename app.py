@@ -1068,7 +1068,24 @@ def profile():
     # Calculate profile completion
     completion = calculate_profile_completion(user)
     
-    return render_template('profile.html', user=user, completion=completion)
+    # Fetch user orders
+    orders = []
+    try:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT id, total_amount, status, order_date, tracking_number 
+            FROM orders 
+            WHERE user_id = %s 
+            ORDER BY order_date DESC
+        ''', (current_user.id,))
+        orders = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error fetching user orders: {e}")
+
+    return render_template('profile.html', user=user, completion=completion, orders=orders)
 
 @app.route('/change-password', methods=['POST'])
 @login_required
