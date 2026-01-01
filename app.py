@@ -17,6 +17,7 @@ import cloudinary
 import cloudinary.uploader
 import random
 import string
+import resend
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -52,6 +53,9 @@ PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"
 PAYFAST_RETURN_URL = "https://buymo.onrender.com/payfast/return"
 PAYFAST_CANCEL_URL = "https://buymo.onrender.com/cart"
 PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
+
+# Resend Configuration
+resend.api_key = os.getenv('RESEND_API_KEY')
 
 @app.template_filter('zar')
 def format_zar(amount):
@@ -104,6 +108,27 @@ def generate_tracking_number():
     date_str = datetime.now().strftime('%Y%m%d')
     random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
     return f"BM-{date_str}-{random_str}"
+
+def send_order_email(user_email, order_details):
+    """Send order confirmation email to customer via Resend API"""
+    try:
+        # Render HTML template
+        html_content = render_template('emails/order_confirmation.html', 
+                                    order=order_details)
+        
+        params = {
+            "from": "BuyMo <onboarding@resend.dev>",
+            "to": [user_email],
+            "subject": f"Order Confirmation - {order_details['tracking_number']}",
+            "html": html_content,
+        }
+
+        email = resend.Emails.send(params)
+        logger.info(f"Order confirmation email sent via Resend to {user_email}: {email['id']}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send order email via Resend: {str(e)}")
+        return False
 
 @app.context_processor
 def inject_cart_count():
@@ -866,6 +891,22 @@ def payfast_notify():
 
             conn.commit()
             logger.info("Order completed successfully")
+
+            # Send confirmation email
+            try:
+                user_data = database.get_user_by_id(user_id)
+                if user_data:
+                    email_details = {
+                        'order_id': order_id,
+                        'tracking_number': tracking_number,
+                        'total_amount': float(total_amount),
+                        'full_name': delivery_info.get('full_name', user_data[1]),
+                        'delivery_method': delivery_info.get('delivery_method', 'delivery'),
+                        'items_count': len(cart_items)
+                    }
+                    send_order_email(user_data[2], email_details)
+            except Exception as email_err:
+                logger.error(f"Error preparing order email: {str(email_err)}")
 
         except Exception as e:
             conn.rollback()

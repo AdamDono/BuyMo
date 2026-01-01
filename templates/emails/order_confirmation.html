@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: #076850;
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: 1px;
+        }
+
+        .content {
+            background: #ffffff;
+            padding: 40px 30px;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+        }
+
+        .order-banner {
+            background: #f0fdf4;
+            border: 1px solid #dcfce7;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .tracking-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #076850;
+            display: block;
+            margin: 10px 0;
+        }
+
+        .details-table {
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+        }
+
+        .details-table td {
+            padding: 12px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .details-label {
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .details-value {
+            text-align: right;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #076850;
+            color: white !important;
+            padding: 14px 28px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            margin-top: 20px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛍️ BuyMo</h1>
+        </div>
+        <div class="content">
+            <h2>Order Confirmed!</h2>
+            <p>Hi {{ order.full_name }},</p>
+            <p>Thank you for shopping with us! We've received your order and we're getting it ready for you.</p>
+
+            <div class="order-banner">
+                <span style="font-size: 14px; color: #065c46; text-transform: uppercase; letter-spacing: 1px;">Tracking
+                    Number</span>
+                <span class="tracking-number">{{ order.tracking_number }}</span>
+            </div>
+
+            <table class="details-table">
+                <tr>
+                    <td class="details-label">Order Total</td>
+                    <td class="details-value">R{{ "{:,.2f}".format(order.total_amount) }}</td>
+                </tr>
+                <tr>
+                    <td class="details-label">Delivery Method</td>
+                    <td class="details-value" style="text-transform: capitalize;">{{ order.delivery_method }}</td>
+                </tr>
+                <tr>
+                    <td class="details-label">Items</td>
+                    <td class="details-value">{{ order.items_count }} item(s)</td>
+                </tr>
+            </table>
+
+            <div style="text-align: center;">
+                <a href="https://buymo.onrender.com/orders" class="btn">View Order Status</a>
+            </div>
+
+            <p style="margin-top: 40px;">If you have any questions, simply reply to this email. We're happy to help!</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 BuyMo. All rights reserved.</p>
+            <p>Shop Smarter, Live Better.</p>
+        </div>
+    </div>
+</body>
+
+</html>
