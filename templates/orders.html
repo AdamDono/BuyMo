@@ -123,10 +123,11 @@
 
     .delivery-info i {
         color: var(--opus-green);
-        width: 20px;
+        width: 24px;
+        margin-right: 8px;
     }
 
-    .order-summary {
+    .no-orders {
         border-top: 2px solid #e5e7eb;
         padding-top: 16px;
     }
@@ -177,8 +178,12 @@
         margin: 0 auto;
     }
 
+    .order-search-form .input-group {
+        gap: 12px;
+    }
+
     .order-search-form .form-control {
-        border-radius: 12px 0 0 12px;
+        border-radius: 12px !important;
         border: 2px solid rgba(255, 255, 255, 0.2);
         background: rgba(255, 255, 255, 0.1);
         color: white;
@@ -190,12 +195,12 @@
     }
 
     .order-search-form .btn {
-        border-radius: 0 12px 12px 0;
+        border-radius: 12px !important;
         background: white;
         color: var(--opus-green);
         font-weight: 700;
         border: none;
-        padding: 0 24px;
+        padding: 12px 24px;
     }
 
     .order-search-form .btn:hover {
