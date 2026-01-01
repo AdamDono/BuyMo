@@ -789,6 +789,11 @@ def payfast_return():
                 login_user(user, remember=True, force=True)
                 session.permanent = True
                 session['user_id'] = user.id
+                
+                # Clear cart count cache
+                cache_key = f'cart_count_{user.id}'
+                session.pop(cache_key, None)
+                
                 flash('Order placed successfully! Check your orders page for details.', 'success')
                 return redirect(url_for('orders'))
         except ValueError:
@@ -1271,15 +1276,27 @@ def orders():
     cur = conn.cursor()
 
     # Fetch completed orders with delivery info and status
+    search_query = request.args.get('search', '').strip()
+    
     try:
-        cur.execute('''
-            SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
-                   o.full_name, o.phone, o.street_address, o.suburb, o.city, 
-                   o.province, o.postal_code, o.delivery_fee, o.pickup_date
-            FROM orders o
-            WHERE o.user_id = %s
-            ORDER BY o.order_date DESC;
-        ''', (current_user.id,))
+        if search_query:
+            cur.execute('''
+                SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
+                       o.full_name, o.phone, o.street_address, o.suburb, o.city, 
+                       o.province, o.postal_code, o.delivery_fee, o.pickup_date, o.tracking_number
+                FROM orders o
+                WHERE o.user_id = %s AND (o.tracking_number ILIKE %s OR CAST(o.id AS TEXT) ILIKE %s)
+                ORDER BY o.order_date DESC;
+            ''', (current_user.id, f'%{search_query}%', f'%{search_query}%'))
+        else:
+            cur.execute('''
+                SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
+                       o.full_name, o.phone, o.street_address, o.suburb, o.city, 
+                       o.province, o.postal_code, o.delivery_fee, o.pickup_date, o.tracking_number
+                FROM orders o
+                WHERE o.user_id = %s
+                ORDER BY o.order_date DESC;
+            ''', (current_user.id,))
         completed_orders = cur.fetchall()
     except Exception as e:
         # If columns don't exist yet, rollback and try basic query
@@ -1349,6 +1366,7 @@ def orders():
             'postal_code': order[11],
             'delivery_fee': float(order[12]) if order[12] else 0,
             'pickup_date': order[13],
+            'tracking_number': order[14],
             'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
         })
 
