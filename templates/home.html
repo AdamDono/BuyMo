@@ -149,8 +149,11 @@
                 flyingImg.style.top = rect.top + 'px';
                 flyingImg.style.width = rect.width + 'px';
                 flyingImg.style.height = rect.height + 'px';
-                flyingImg.style.objectFit = 'cover';
+                flyingImg.style.objectFit = 'contain';
+                flyingImg.style.background = 'white';
+                flyingImg.style.padding = '5px';
                 flyingImg.style.borderRadius = '12px';
+                flyingImg.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
                 flyingImg.style.zIndex = '9999';
 
                 document.body.appendChild(flyingImg);
