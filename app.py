@@ -6,7 +6,10 @@ from werkzeug.utils import secure_filename
 import os
 import json
 import requests
+from dotenv import load_dotenv
 from urllib.parse import urlencode
+
+load_dotenv()
 import logging
 from datetime import timedelta
 import time
