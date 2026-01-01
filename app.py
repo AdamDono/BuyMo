@@ -968,6 +968,35 @@ def edit_product(product_id):
             description = request.form['description']
             category_id = int(request.form['category'])
             image_url = product[4]  # Keep existing image
+            image = request.files.get('image')
+
+            if image and image.filename and allowed_file(image.filename):
+                if os.getenv('CLOUDINARY_CLOUD_NAME'):
+                    try:
+                        cloudinary.config(
+                            cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
+                            api_key = os.getenv('CLOUDINARY_API_KEY'),
+                            api_secret = os.getenv('CLOUDINARY_API_SECRET')
+                        )
+                        upload_result = cloudinary.uploader.upload(image)
+                        image_url = upload_result['secure_url']
+                        logger.info(f"Image updated on Cloudinary: {image_url}")
+                    except Exception as e:
+                        logger.error(f"Cloudinary upload failed: {str(e)}")
+                        flash('Cloudinary upload failed, falling back to local storage (ephemeral).', 'warning')
+                        ext = image.filename.rsplit('.', 1)[1].lower()
+                        filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}.{ext}")
+                        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                        image.save(file_path)
+                        image_url = f"uploads/{filename}"
+                else:
+                    ext = image.filename.rsplit('.', 1)[1].lower()
+                    filename = secure_filename(f"product_{name.replace(' ', '_')}_{int(time.time())}.{ext}")
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                    image.save(file_path)
+                    image_url = f"uploads/{filename}"
 
             cur.execute('''
                 UPDATE products 
