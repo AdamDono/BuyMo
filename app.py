@@ -66,10 +66,11 @@ PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
 
 # Mail Configuration
 app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 465))
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'False').lower() == 'true'
+app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'True').lower() == 'true'
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
-app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono100@gmail.com')
 
 mail = Mail(app)
@@ -130,10 +131,15 @@ def send_async_email(app, msg):
     """Send email in a background thread to prevent worker timeouts"""
     with app.app_context():
         try:
+            # Log what we are trying to do for debugging
+            server = app.config.get('MAIL_SERVER')
+            port = app.config.get('MAIL_PORT')
+            logger.info(f"Attempting background email to {msg.recipients} via {server}:{port}")
+            
             mail.send(msg)
-            logger.info(f"Background email sent successfully to {msg.recipients}")
+            logger.info(f"Background email delivered successfully to {msg.recipients}")
         except Exception as e:
-            logger.error(f"Background email failed: {str(e)}")
+            logger.error(f"Background email CRITICAL FAILURE to {msg.recipients}: {str(e)}")
 
 def send_order_email(user_email, order_details):
     """Send order confirmation email to customer via Gmail SMTP (Async)"""
