@@ -142,7 +142,9 @@ def send_order_email(user_email, order_details):
         logger.info(f"Order confirmation email sent via Gmail to {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to send order email via Gmail: {str(e)}")
+        error_msg = f"Order Email Error: {str(e)}"
+        logger.error(error_msg)
+        flash(error_msg, 'error')
         return False
 
 def send_welcome_email(user_email, username):
@@ -162,7 +164,9 @@ def send_welcome_email(user_email, username):
         logger.info(f"Welcome email sent via Gmail to {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to send welcome email via Gmail: {str(e)}")
+        error_msg = f"Welcome Email Error: {str(e)}"
+        logger.error(error_msg)
+        flash(error_msg, 'error')
         return False
 
 def send_abandoned_cart_email(user_email, username, cart_items):
@@ -204,7 +208,9 @@ def send_reset_email(user_email, username, reset_url):
         logger.info(f"Password reset email sent to {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to send reset email via Gmail: {str(e)}")
+        error_msg = f"Reset Email Error: {str(e)}"
+        logger.error(error_msg)
+        flash(error_msg, 'error')
         return False
 
 @app.context_processor
@@ -1856,27 +1862,30 @@ def cleanup_test_users():
         abort(403)
         
     emails_to_remove = ['adamdono100@gmail.com', 'adam@thedigitalacademy.co.za']
+    actual_removed = 0
     
     conn = database.get_db_connection()
     try:
         cur = conn.cursor()
-        # First remove cart items and orders associated with these users to avoid foreign key errors
         for email in emails_to_remove:
             cur.execute('SELECT id FROM users WHERE email = %s', (email,))
             user = cur.fetchone()
             if user:
                 user_id = user[0]
+                # Aggressive cleanup of all dependencies
                 cur.execute('DELETE FROM cart_items WHERE user_id = %s', (user_id,))
                 cur.execute('DELETE FROM pending_orders WHERE user_id = %s', (user_id,))
-                # Note: We aren't deleting historical orders here to keep records, 
-                # but if you need a total wipe, we would add: 'DELETE FROM orders WHERE user_id = %s'
+                cur.execute('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = %s)', (user_id,))
+                cur.execute('DELETE FROM orders WHERE user_id = %s', (user_id,))
                 cur.execute('DELETE FROM users WHERE id = %s', (user_id,))
+                actual_removed += 1
         
         conn.commit()
-        flash(f'Successfully removed {len(emails_to_remove)} test accounts!', 'success')
+        flash(f'Total actual users removed: {actual_removed}', 'success')
     except Exception as e:
         conn.rollback()
-        flash(f'Error during cleanup: {str(e)}', 'error')
+        logger.error(f"Cleanup error: {str(e)}")
+        flash(f'Cleanup failed: {str(e)}', 'error')
     finally:
         cur.close()
         conn.close()
