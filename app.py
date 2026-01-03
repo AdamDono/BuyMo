@@ -19,6 +19,7 @@ import cloudinary.uploader
 import random
 import string
 from flask_mail import Mail, Message
+from threading import Thread
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -125,8 +126,17 @@ def generate_tracking_number():
     random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
     return f"BM-{date_str}-{random_str}"
 
+def send_async_email(app, msg):
+    """Send email in a background thread to prevent worker timeouts"""
+    with app.app_context():
+        try:
+            mail.send(msg)
+            logger.info(f"Background email sent successfully to {msg.recipients}")
+        except Exception as e:
+            logger.error(f"Background email failed: {str(e)}")
+
 def send_order_email(user_email, order_details):
-    """Send order confirmation email to customer via Gmail SMTP"""
+    """Send order confirmation email to customer via Gmail SMTP (Async)"""
     try:
         if not app.config.get('MAIL_PASSWORD'):
             logger.error("MAIL_PASSWORD not set. Cannot send email.")
@@ -138,17 +148,17 @@ def send_order_email(user_email, order_details):
             recipients=[user_email]
         )
         msg.html = render_template('emails/order_confirmation.html', order=order_details)
-        mail.send(msg)
-        logger.info(f"Order confirmation email sent via Gmail to {user_email}")
+        
+        # Start background thread
+        Thread(target=send_async_email, args=(app, msg)).start()
+        logger.info(f"Order email thread started for {user_email}")
         return True
     except Exception as e:
-        error_msg = f"Order Email Error: {str(e)}"
-        logger.error(error_msg)
-        flash(error_msg, 'error')
+        logger.error(f"Failed to start order email thread: {str(e)}")
         return False
 
 def send_welcome_email(user_email, username):
-    """Send a premium welcome email to new users via Gmail SMTP"""
+    """Send a premium welcome email to new users via Gmail SMTP (Async)"""
     try:
         if not app.config.get('MAIL_PASSWORD'):
             logger.error("MAIL_PASSWORD not set. Cannot send welcome email.")
@@ -160,17 +170,17 @@ def send_welcome_email(user_email, username):
             recipients=[user_email]
         )
         msg.html = render_template('emails/welcome.html', username=username)
-        mail.send(msg)
-        logger.info(f"Welcome email sent via Gmail to {user_email}")
+        
+        # Start background thread
+        Thread(target=send_async_email, args=(app, msg)).start()
+        logger.info(f"Welcome email thread started for {user_email}")
         return True
     except Exception as e:
-        error_msg = f"Welcome Email Error: {str(e)}"
-        logger.error(error_msg)
-        flash(error_msg, 'error')
+        logger.error(f"Failed to start welcome email thread: {str(e)}")
         return False
 
 def send_abandoned_cart_email(user_email, username, cart_items):
-    """Send an abandoned cart reminder via Gmail SMTP"""
+    """Send an abandoned cart reminder via Gmail SMTP (Async)"""
     try:
         if not app.config.get('MAIL_PASSWORD'):
             logger.error("MAIL_PASSWORD not set. Cannot send abandoned cart email.")
@@ -182,15 +192,17 @@ def send_abandoned_cart_email(user_email, username, cart_items):
             recipients=[user_email]
         )
         msg.html = render_template('emails/abandoned_cart.html', username=username, items=cart_items)
-        mail.send(msg)
-        logger.info(f"Abandoned cart email sent via Gmail to {user_email}")
+        
+        # Start background thread
+        Thread(target=send_async_email, args=(app, msg)).start()
+        logger.info(f"Abandoned cart email thread started for {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to send abandoned cart email via Gmail: {str(e)}")
+        logger.error(f"Failed to start abandoned cart email thread: {str(e)}")
         return False
 
 def send_reset_email(user_email, username, reset_url):
-    """Send a secure password reset link via Gmail SMTP"""
+    """Send a secure password reset link via Gmail SMTP (Async)"""
     try:
         if not app.config.get('MAIL_PASSWORD'):
             logger.error("MAIL_PASSWORD not set. Cannot send reset email.")
@@ -204,13 +216,13 @@ def send_reset_email(user_email, username, reset_url):
         msg.html = render_template('emails/reset_password.html', 
                                  username=username, 
                                  reset_url=reset_url)
-        mail.send(msg)
-        logger.info(f"Password reset email sent to {user_email}")
+        
+        # Start background thread
+        Thread(target=send_async_email, args=(app, msg)).start()
+        logger.info(f"Reset email thread started for {user_email}")
         return True
     except Exception as e:
-        error_msg = f"Reset Email Error: {str(e)}"
-        logger.error(error_msg)
-        flash(error_msg, 'error')
+        logger.error(f"Failed to start reset email thread: {str(e)}")
         return False
 
 @app.context_processor
