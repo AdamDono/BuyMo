@@ -16,10 +16,12 @@ import secrets
 import time
 import cloudinary
 import cloudinary.uploader
-import random
-import string
 from flask_mail import Mail, Message
 from threading import Thread
+import socket
+
+# Set global timeout for all network connections (prevents hangs)
+socket.setdefaulttimeout(20)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -65,7 +67,7 @@ PAYFAST_CANCEL_URL = "https://buymo.onrender.com/cart"
 PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
 
 # Mail Configuration
-app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.googlemail.com')
 app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 465))
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'False').lower() == 'true'
 app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'True').lower() == 'true'
@@ -132,15 +134,18 @@ def send_async_email(app, msg):
     """Send email in a background thread to prevent worker timeouts"""
     with app.app_context():
         try:
-            # Log what we are trying to do for debugging
             server = app.config.get('MAIL_SERVER')
             port = app.config.get('MAIL_PORT')
-            logger.info(f"Attempting background email to {msg.recipients} via {server}:{port}")
+            logger.info(f"THREAD START: Attempting email to {msg.recipients} via {server}:{port}")
             
+            # Use the mail instance to send
             mail.send(msg)
-            logger.info(f"Background email delivered successfully to {msg.recipients}")
+            
+            logger.info(f"THREAD SUCCESS: Email delivered to {msg.recipients}")
+        except socket.timeout:
+            logger.error(f"THREAD TIMEOUT: Connection to {server} took too long.")
         except Exception as e:
-            logger.error(f"Background email CRITICAL FAILURE to {msg.recipients}: {str(e)}")
+            logger.error(f"THREAD ERROR: Failed to deliver to {msg.recipients}: {str(e)}")
 
 def send_order_email(user_email, order_details):
     """Send order confirmation email to customer via Gmail SMTP (Async)"""
