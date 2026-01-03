@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Abandoned Carts - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>🛒 Abandoned Carts</h1>
+        {% if carts %}
+        <form action="{{ url_for('send_cart_reminders') }}" method="POST">
+            <button type="submit" class="btn btn-warning"
+                onclick="return confirm('Are you sure you want to send reminders to all users?')">
+                <i class="fas fa-paper-plane"></i> Send All Reminders
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Items in Cart</th>
+                            <th>Last Activity</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cart in carts %}
+                        <tr>
+                            <td><strong>{{ cart[1] }}</strong></td>
+                            <td>{{ cart[2] }}</td>
+                            <td><span class="badge bg-info text-dark">{{ cart[3] }} items</span></td>
+                            <td>{{ cart[4].strftime('%B %d, %I:%M %p') }}</td>
+                            <td>
+                                <span class="badge bg-danger">Abandoned</span>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4">
+                                <i class="fas fa-check-circle text-success mb-2"
+                                    style="font-size: 2rem; display: block;"></i>
+                                <p class="text-muted">No abandoned carts found! (Checking for inactivity > 1 hour)</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

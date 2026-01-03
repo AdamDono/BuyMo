@@ -11,13 +11,14 @@ from urllib.parse import urlencode
 
 load_dotenv()
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
+import secrets
 import time
 import cloudinary
 import cloudinary.uploader
 import random
 import string
-import resend
+from flask_mail import Mail, Message
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -29,7 +30,10 @@ from database import (
     get_user_by_id,
     update_user_profile,
     update_user_password,
-    create_tables
+    create_tables,
+    set_user_reset_token,
+    get_user_by_reset_token,
+    clear_user_reset_token
 )
 
 # Create tables if they don't exist
@@ -54,8 +58,15 @@ PAYFAST_RETURN_URL = "https://buymo.onrender.com/payfast/return"
 PAYFAST_CANCEL_URL = "https://buymo.onrender.com/cart"
 PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
 
-# Resend Configuration
-resend.api_key = os.getenv('RESEND_API_KEY')
+# Mail Configuration
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', ('BuyMo', 'adamdono89@gmail.com'))
+
+mail = Mail(app)
 
 @app.template_filter('zar')
 def format_zar(amount):
@@ -110,44 +121,65 @@ def generate_tracking_number():
     return f"BM-{date_str}-{random_str}"
 
 def send_order_email(user_email, order_details):
-    """Send order confirmation email to customer via Resend API"""
+    """Send order confirmation email to customer via Gmail SMTP"""
     try:
-        # Render HTML template
-        html_content = render_template('emails/order_confirmation.html', 
-                                    order=order_details)
-        
-        params = {
-            "from": "BuyMo <onboarding@resend.dev>",
-            "to": [user_email],
-            "subject": f"Order Confirmation - {order_details['tracking_number']}",
-            "html": html_content,
-        }
-
-        email = resend.Emails.send(params)
-        logger.info(f"Order confirmation email sent via Resend to {user_email}: {email['id']}")
+        msg = Message(
+            f"Order Confirmation - {order_details['tracking_number']}",
+            recipients=[user_email]
+        )
+        msg.html = render_template('emails/order_confirmation.html', order=order_details)
+        mail.send(msg)
+        logger.info(f"Order confirmation email sent via Gmail to {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to send order email via Resend: {str(e)}")
+        logger.error(f"Failed to send order email via Gmail: {str(e)}")
         return False
 
 def send_welcome_email(user_email, username):
-    """Send a premium welcome email to new users via Resend API"""
+    """Send a premium welcome email to new users via Gmail SMTP"""
     try:
-        html_content = render_template('emails/welcome.html', 
-                                    username=username)
-        
-        params = {
-            "from": "BuyMo <onboarding@resend.dev>",
-            "to": [user_email],
-            "subject": f"Welcome to BuyMo, {username}! 🛍️",
-            "html": html_content,
-        }
-
-        email = resend.Emails.send(params)
-        logger.info(f"Welcome email sent via Resend to {user_email}")
+        msg = Message(
+            f"Welcome to BuyMo, {username}! 🛍️",
+            recipients=[user_email]
+        )
+        msg.html = render_template('emails/welcome.html', username=username)
+        mail.send(msg)
+        logger.info(f"Welcome email sent via Gmail to {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to send welcome email via Resend: {str(e)}")
+        logger.error(f"Failed to send welcome email via Gmail: {str(e)}")
+        return False
+
+def send_abandoned_cart_email(user_email, username, cart_items):
+    """Send an abandoned cart reminder via Gmail SMTP"""
+    try:
+        msg = Message(
+            "🛒 You left something behind! - BuyMo",
+            recipients=[user_email]
+        )
+        msg.html = render_template('emails/abandoned_cart.html', username=username, items=cart_items)
+        mail.send(msg)
+        logger.info(f"Abandoned cart email sent via Gmail to {user_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send abandoned cart email via Gmail: {str(e)}")
+        return False
+
+def send_reset_email(user_email, username, reset_url):
+    """Send a secure password reset link via Gmail SMTP"""
+    try:
+        msg = Message(
+            "🔐 Password Reset - BuyMo",
+            recipients=[user_email]
+        )
+        msg.html = render_template('emails/reset_password.html', 
+                                 username=username, 
+                                 reset_url=reset_url)
+        mail.send(msg)
+        logger.info(f"Password reset email sent to {user_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send reset email via Gmail: {str(e)}")
         return False
 
 @app.context_processor
@@ -272,6 +304,50 @@ def signup():
         flash('Registration successful! Please login.', 'success')
         return redirect(url_for('login'))
     return render_template('signup.html')
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form['email']
+        user = database.get_user_by_email(email)
+        
+        if user:
+            token = secrets.token_urlsafe(32)
+            expiry = datetime.now() + timedelta(hours=1)
+            set_user_reset_token(email, token, expiry)
+            
+            reset_url = url_for('reset_password', token=token, _external=True)
+            send_reset_email(email, user[1], reset_url)
+            
+        flash('If an account exists with that email, a reset link has been sent.', 'info')
+        return redirect(url_for('login'))
+        
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user = get_user_by_reset_token(token)
+    
+    if not user or user[3] < datetime.now():
+        flash('Invalid or expired reset link.', 'error')
+        return redirect(url_for('forgot_password'))
+        
+    if request.method == 'POST':
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
+        
+        if password != confirm_password:
+            flash('Passwords do not match.', 'error')
+            return render_template('reset_password.html')
+            
+        new_hash = generate_password_hash(password)
+        update_user_password(user[0], new_hash)
+        clear_user_reset_token(user[0])
+        
+        flash('Your password has been updated! Please login.', 'success')
+        return redirect(url_for('login'))
+        
+    return render_template('reset_password.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1440,6 +1516,74 @@ def admin_products():
     conn.close()
     
     return render_template('admin_products.html', products=products_list)
+
+@app.route('/admin/abandoned-carts')
+@login_required
+def admin_abandoned_carts():
+    if not current_user.is_admin:
+        abort(403)
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Logic: Find users who have items in their cart added more than 1 hour ago
+    # For testing we use 1 minute, for production we use '24 hours'
+    cur.execute('''
+        SELECT u.id, u.username, u.email, COUNT(ci.id) as item_count, MAX(ci.added_at) as last_added
+        FROM users u
+        JOIN cart_items ci ON u.id = ci.user_id
+        LEFT JOIN orders o ON u.id = o.user_id AND o.order_date > ci.added_at
+        WHERE o.id IS NULL
+        GROUP BY u.id, u.username, u.email
+        HAVING MAX(ci.added_at) < NOW() - INTERVAL '1 hour'
+        ORDER BY last_added DESC
+    ''')
+    abandoned_carts = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('admin_abandoned_carts.html', carts=abandoned_carts)
+
+@app.route('/admin/send-cart-reminders', methods=['POST'])
+@login_required
+def send_cart_reminders():
+    if not current_user.is_admin:
+        abort(403)
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Get all information needed for emails
+    cur.execute('''
+        SELECT DISTINCT u.email, u.username, u.id
+        FROM users u
+        JOIN cart_items ci ON u.id = ci.user_id
+        LEFT JOIN orders o ON u.id = o.user_id AND o.order_date > ci.added_at
+        WHERE o.id IS NULL
+        AND ci.added_at < NOW() - INTERVAL '1 hour'
+    ''')
+    users_to_remind = cur.fetchall()
+    
+    sent_count = 0
+    for user_email, username, user_id in users_to_remind:
+        # Get items for this specific user
+        cur.execute('''
+            SELECT p.name, p.price
+            FROM cart_items ci
+            JOIN products p ON ci.product_id = p.id
+            WHERE ci.user_id = %s
+        ''', (user_id,))
+        items = [{'name': row[0], 'price': float(row[1])} for row in cur.fetchall()]
+        
+        if send_abandoned_cart_email(user_email, username, items):
+            sent_count += 1
+            
+    cur.close()
+    conn.close()
+    
+    flash(f'Successfully sent {sent_count} reminder emails!', 'success')
+    return redirect(url_for('admin_abandoned_carts'))
 
 @app.route('/admin/orders')
 @login_required

@@ -60,8 +60,23 @@ def create_tables():
             password_hash VARCHAR(255) NOT NULL,
             is_admin BOOLEAN DEFAULT FALSE,
             profile_image VARCHAR(255),
+            reset_token VARCHAR(100),
+            reset_expiry TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+    ''')
+    
+    # Add reset columns if they don't exist
+    cur.execute('''
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='reset_token') THEN
+                ALTER TABLE users ADD COLUMN reset_token VARCHAR(100);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='reset_expiry') THEN
+                ALTER TABLE users ADD COLUMN reset_expiry TIMESTAMP;
+            END IF;
+        END $$;
     ''')
     
     # Categories table
@@ -241,6 +256,43 @@ def update_user_password(user_id, new_password_hash):
         cur.close()
         return_db_connection(conn)
 
+
+def set_user_reset_token(email, token, expiry):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        UPDATE users 
+        SET reset_token = %s, reset_expiry = %s 
+        WHERE email = %s
+    ''', (token, expiry, email))
+    conn.commit()
+    cur.close()
+    return_db_connection(conn)
+
+def get_user_by_reset_token(token):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT id, username, email, reset_expiry 
+        FROM users 
+        WHERE reset_token = %s
+    ''', (token,))
+    user = cur.fetchone()
+    cur.close()
+    return_db_connection(conn)
+    return user
+
+def clear_user_reset_token(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        UPDATE users 
+        SET reset_token = NULL, reset_expiry = NULL 
+        WHERE id = %s
+    ''', (user_id,))
+    conn.commit()
+    cur.close()
+    return_db_connection(conn)
 
 # Call the function to create tables
 create_tables()
