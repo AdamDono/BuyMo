@@ -72,6 +72,7 @@ app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'True').lower() == 'true'
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono100@gmail.com')
+app.config['MAIL_DEBUG'] = True  # Enable this to see exactly what Gmail says
 
 mail = Mail(app)
 
@@ -155,8 +156,10 @@ def send_order_email(user_email, order_details):
         )
         msg.html = render_template('emails/order_confirmation.html', order=order_details)
         
-        # Start background thread
-        Thread(target=send_async_email, args=(app, msg)).start()
+        # Start background thread (as a daemon so it doesn't block shutdown)
+        thread = Thread(target=send_async_email, args=(app, msg))
+        thread.daemon = True
+        thread.start()
         logger.info(f"Order email thread started for {user_email}")
         return True
     except Exception as e:
@@ -177,8 +180,10 @@ def send_welcome_email(user_email, username):
         )
         msg.html = render_template('emails/welcome.html', username=username)
         
-        # Start background thread
-        Thread(target=send_async_email, args=(app, msg)).start()
+        # Start background thread (daemon)
+        thread = Thread(target=send_async_email, args=(app, msg))
+        thread.daemon = True
+        thread.start()
         logger.info(f"Welcome email thread started for {user_email}")
         return True
     except Exception as e:
@@ -199,8 +204,10 @@ def send_abandoned_cart_email(user_email, username, cart_items):
         )
         msg.html = render_template('emails/abandoned_cart.html', username=username, items=cart_items)
         
-        # Start background thread
-        Thread(target=send_async_email, args=(app, msg)).start()
+        # Start background thread (daemon)
+        thread = Thread(target=send_async_email, args=(app, msg))
+        thread.daemon = True
+        thread.start()
         logger.info(f"Abandoned cart email thread started for {user_email}")
         return True
     except Exception as e:
@@ -223,8 +230,10 @@ def send_reset_email(user_email, username, reset_url):
                                  username=username, 
                                  reset_url=reset_url)
         
-        # Start background thread
-        Thread(target=send_async_email, args=(app, msg)).start()
+        # Start background thread (daemon)
+        thread = Thread(target=send_async_email, args=(app, msg))
+        thread.daemon = True
+        thread.start()
         logger.info(f"Reset email thread started for {user_email}")
         return True
     except Exception as e:
