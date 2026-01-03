@@ -69,7 +69,7 @@ app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
-app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono89@gmail.com')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono100@gmail.com')
 
 mail = Mail(app)
 
@@ -1868,7 +1868,8 @@ def cleanup_test_users():
     try:
         cur = conn.cursor()
         for email in emails_to_remove:
-            cur.execute('SELECT id FROM users WHERE email = %s', (email,))
+            # Use LOWER() and TRIM() to ensure we find the match regardless of casing/spacing
+            cur.execute('SELECT id FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(%s))', (email,))
             user = cur.fetchone()
             if user:
                 user_id = user[0]
@@ -1881,7 +1882,7 @@ def cleanup_test_users():
                 actual_removed += 1
         
         conn.commit()
-        flash(f'Total actual users removed: {actual_removed}', 'success')
+        flash(f'Cleanup complete. Total actual users removed: {actual_removed}', 'success')
     except Exception as e:
         conn.rollback()
         logger.error(f"Cleanup error: {str(e)}")
