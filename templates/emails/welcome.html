@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: #076850;
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: 1px;
+        }
+
+        .content {
+            background: #ffffff;
+            padding: 40px 30px;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+        }
+
+        .welcome-banner {
+            background: #f0fdf4;
+            border: 1px solid #dcfce7;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .discount-code {
+            font-size: 28px;
+            font-weight: 800;
+            color: #076850;
+            display: block;
+            margin: 10px 0;
+            letter-spacing: 2px;
+            border: 2px dashed #076850;
+            padding: 10px;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #076850;
+            color: #ffffff !important;
+            padding: 14px 28px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            margin-top: 20px;
+        }
+
+        .features {
+            margin: 30px 0;
+        }
+
+        .feature-item {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .feature-icon {
+            margin-right: 12px;
+            font-size: 20px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛍️ Welcome to BuyMo</h1>
+        </div>
+        <div class="content">
+            <h2>Hi {{ username }},</h2>
+            <p>We're absolutely thrilled to have you here! Your journey to smarter, high-end shopping starts today.</p>
+
+            <div class="welcome-banner">
+                <p style="margin-top: 0; font-weight: 600; color: #065c46;">A SPECIAL GIFT FOR YOU</p>
+                <p>Use this code at checkout for <strong>10% OFF</strong> your first order!</p>
+                <span class="discount-code">WELCOME10</span>
+                <p style="font-size: 12px; color: #6b7280; margin-bottom: 0;">*Valid for new customers only.</p>
+            </div>
+
+            <div class="features">
+                <p><strong>What can you do now?</strong></p>
+                <div class="feature-item">
+                    <span class="feature-icon">⌚</span>
+                    <span>Browse our latest premium gadgets.</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🚚</span>
+                    <span>Track your orders in real-time.</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📦</span>
+                    <span>Manage your delivery preferences.</span>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="https://buymo.onrender.com/home" class="btn" style="color: #ffffff !important;">Start Shopping
+                    Now</a>
+            </div>
+
+            <p style="margin-top: 40px;">If you have any questions or just want to say hi, simply reply to this email.
+                We're here for you!</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 BuyMo. All rights reserved.</p>
+            <p>Shop Smarter, Live Better.</p>
+        </div>
+    </div>
+</body>
+
+</html>

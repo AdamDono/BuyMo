@@ -130,6 +130,26 @@ def send_order_email(user_email, order_details):
         logger.error(f"Failed to send order email via Resend: {str(e)}")
         return False
 
+def send_welcome_email(user_email, username):
+    """Send a premium welcome email to new users via Resend API"""
+    try:
+        html_content = render_template('emails/welcome.html', 
+                                    username=username)
+        
+        params = {
+            "from": "BuyMo <onboarding@resend.dev>",
+            "to": [user_email],
+            "subject": f"Welcome to BuyMo, {username}! 🛍️",
+            "html": html_content,
+        }
+
+        email = resend.Emails.send(params)
+        logger.info(f"Welcome email sent via Resend to {user_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send welcome email via Resend: {str(e)}")
+        return False
+
 @app.context_processor
 def inject_cart_count():
     """Make cart count available to all templates with caching"""
@@ -242,6 +262,13 @@ def signup():
             return redirect(url_for('login'))
 
         database.create_user(username, email, password)
+        
+        # Send welcome email asynchronously is better, but simple call for now
+        try:
+            send_welcome_email(email, username)
+        except Exception as e:
+            logger.error(f"Critical error sending welcome email: {str(e)}")
+            
         flash('Registration successful! Please login.', 'success')
         return redirect(url_for('login'))
     return render_template('signup.html')
