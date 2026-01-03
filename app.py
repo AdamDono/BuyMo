@@ -37,7 +37,12 @@ from database import (
 )
 
 # Create tables if they don't exist
-create_tables()
+try:
+    create_tables()
+    logger.info("Database tables initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize database tables: {str(e)}")
+    # We don't crash here, because Render needs the app to start to show logs
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Fliph106')
@@ -64,7 +69,7 @@ app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
-app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', ('BuyMo', 'adamdono89@gmail.com'))
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono89@gmail.com')
 
 mail = Mail(app)
 
@@ -123,8 +128,13 @@ def generate_tracking_number():
 def send_order_email(user_email, order_details):
     """Send order confirmation email to customer via Gmail SMTP"""
     try:
+        if not app.config.get('MAIL_PASSWORD'):
+            logger.error("MAIL_PASSWORD not set. Cannot send email.")
+            return False
+            
         msg = Message(
             f"Order Confirmation - {order_details['tracking_number']}",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
             recipients=[user_email]
         )
         msg.html = render_template('emails/order_confirmation.html', order=order_details)
@@ -138,8 +148,13 @@ def send_order_email(user_email, order_details):
 def send_welcome_email(user_email, username):
     """Send a premium welcome email to new users via Gmail SMTP"""
     try:
+        if not app.config.get('MAIL_PASSWORD'):
+            logger.error("MAIL_PASSWORD not set. Cannot send welcome email.")
+            return False
+            
         msg = Message(
             f"Welcome to BuyMo, {username}! 🛍️",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
             recipients=[user_email]
         )
         msg.html = render_template('emails/welcome.html', username=username)
@@ -153,8 +168,13 @@ def send_welcome_email(user_email, username):
 def send_abandoned_cart_email(user_email, username, cart_items):
     """Send an abandoned cart reminder via Gmail SMTP"""
     try:
+        if not app.config.get('MAIL_PASSWORD'):
+            logger.error("MAIL_PASSWORD not set. Cannot send abandoned cart email.")
+            return False
+            
         msg = Message(
             "🛒 You left something behind! - BuyMo",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
             recipients=[user_email]
         )
         msg.html = render_template('emails/abandoned_cart.html', username=username, items=cart_items)
@@ -168,8 +188,13 @@ def send_abandoned_cart_email(user_email, username, cart_items):
 def send_reset_email(user_email, username, reset_url):
     """Send a secure password reset link via Gmail SMTP"""
     try:
+        if not app.config.get('MAIL_PASSWORD'):
+            logger.error("MAIL_PASSWORD not set. Cannot send reset email.")
+            return False
+            
         msg = Message(
             "🔐 Password Reset - BuyMo",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
             recipients=[user_email]
         )
         msg.html = render_template('emails/reset_password.html', 
@@ -1823,6 +1848,40 @@ def migrate_database():
             conn.close()
     
     return render_template('admin_migrate.html', results=None, migrated=False)
+
+@app.route('/admin/cleanup-test-users')
+@login_required
+def cleanup_test_users():
+    if not current_user.is_admin:
+        abort(403)
+        
+    emails_to_remove = ['adamdono100@gmail.com', 'adam@thedigitalacademy.co.za']
+    
+    conn = database.get_db_connection()
+    try:
+        cur = conn.cursor()
+        # First remove cart items and orders associated with these users to avoid foreign key errors
+        for email in emails_to_remove:
+            cur.execute('SELECT id FROM users WHERE email = %s', (email,))
+            user = cur.fetchone()
+            if user:
+                user_id = user[0]
+                cur.execute('DELETE FROM cart_items WHERE user_id = %s', (user_id,))
+                cur.execute('DELETE FROM pending_orders WHERE user_id = %s', (user_id,))
+                # Note: We aren't deleting historical orders here to keep records, 
+                # but if you need a total wipe, we would add: 'DELETE FROM orders WHERE user_id = %s'
+                cur.execute('DELETE FROM users WHERE id = %s', (user_id,))
+        
+        conn.commit()
+        flash(f'Successfully removed {len(emails_to_remove)} test accounts!', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error during cleanup: {str(e)}', 'error')
+    finally:
+        cur.close()
+        conn.close()
+        
+    return redirect(url_for('home'))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render
