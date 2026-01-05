@@ -1,3 +1,14 @@
+import socket
+# CRITICAL: This MUST be the first thing in the file
+def force_ipv4():
+    old_getaddrinfo = socket.getaddrinfo
+    def new_getaddrinfo(*args, **kwargs):
+        responses = old_getaddrinfo(*args, **kwargs)
+        return [r for r in responses if r[0] == socket.AF_INET]
+    socket.getaddrinfo = new_getaddrinfo
+force_ipv4()
+socket.setdefaulttimeout(30)
+
 from flask import Flask, render_template, request, redirect, url_for, flash, abort, session, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import database
@@ -18,16 +29,8 @@ import cloudinary
 import cloudinary.uploader
 from flask_mail import Mail, Message
 from threading import Thread
-import socket
-
-# FORCE IPv4: This resolves 'Network is unreachable' (Errno 101) on Render/Heroku
-# by preventing the app from trying to use IPv6 paths that are blocked.
-old_getaddrinfo = socket.getaddrinfo
-def new_getaddrinfo(*args, **kwargs):
-    responses = old_getaddrinfo(*args, **kwargs)
-    return [r for r in responses if r[0] == socket.AF_INET]
-socket.getaddrinfo = new_getaddrinfo
-socket.setdefaulttimeout(30)
+import random
+import string
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -77,10 +80,28 @@ app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
 app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
 app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'False').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'adamdono89@gmail.com')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono100@gmail.com')
+
+# Parse MAIL_DEFAULT_SENDER to extract just the email if it's in "Name <email>" format
+default_sender = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono89@gmail.com')
+if '<' in default_sender and '>' in default_sender:
+    # Extract email from "Name <email@domain.com>" format
+    import re
+    email_match = re.search(r'<(.+?)>', default_sender)
+    if email_match:
+        app.config['MAIL_DEFAULT_SENDER'] = email_match.group(1)
+    else:
+        app.config['MAIL_DEFAULT_SENDER'] = default_sender
+else:
+    app.config['MAIL_DEFAULT_SENDER'] = default_sender
+
 app.config['MAIL_DEBUG'] = True
+
+# Log mail configuration (without password)
+logger.info(f"Mail Config: Server={app.config['MAIL_SERVER']}, Port={app.config['MAIL_PORT']}, TLS={app.config['MAIL_USE_TLS']}, SSL={app.config['MAIL_USE_SSL']}")
+logger.info(f"Mail Config: Username={app.config['MAIL_USERNAME']}, Sender={app.config['MAIL_DEFAULT_SENDER']}")
+logger.info(f"Mail Config: Password={'SET' if app.config['MAIL_PASSWORD'] else 'NOT SET'}")
 
 mail = Mail(app)
 
@@ -142,22 +163,37 @@ def send_async_email(app, msg):
         try:
             server = app.config.get('MAIL_SERVER')
             port = app.config.get('MAIL_PORT')
-            logger.info(f"THREAD START: Attempting email to {msg.recipients} via {server}:{port}")
+            username = app.config.get('MAIL_USERNAME')
+            use_tls = app.config.get('MAIL_USE_TLS')
+            use_ssl = app.config.get('MAIL_USE_SSL')
+            
+            logger.info(f"THREAD START: Attempting email to {msg.recipients}")
+            logger.info(f"THREAD CONFIG: {server}:{port}, TLS={use_tls}, SSL={use_ssl}, From={msg.sender}")
             
             # Use the mail instance to send
             mail.send(msg)
             
-            logger.info(f"THREAD SUCCESS: Email delivered to {msg.recipients}")
-        except socket.timeout:
-            logger.error(f"THREAD TIMEOUT: Connection to {server} took too long.")
+            logger.info(f"✓ THREAD SUCCESS: Email delivered to {msg.recipients}")
+        except socket.timeout as e:
+            logger.error(f"✗ THREAD TIMEOUT: Connection to {server}:{port} timed out - {str(e)}")
+        except ConnectionRefusedError as e:
+            logger.error(f"✗ THREAD CONNECTION REFUSED: Cannot connect to {server}:{port} - {str(e)}")
         except Exception as e:
-            logger.error(f"THREAD ERROR: Failed to deliver to {msg.recipients}: {str(e)}")
+            error_type = type(e).__name__
+            logger.error(f"✗ THREAD ERROR ({error_type}): Failed to deliver to {msg.recipients}")
+            logger.error(f"  Error details: {str(e)}")
+            # Log the full traceback for debugging
+            import traceback
+            logger.error(f"  Traceback: {traceback.format_exc()}")
 
 def send_order_email(user_email, order_details):
     """Send order confirmation email to customer via Gmail SMTP (Async)"""
     try:
+        logger.info(f"📧 Preparing order confirmation email for {user_email}")
+        logger.info(f"   Order details: Tracking={order_details.get('tracking_number')}, Total=R{order_details.get('total_amount')}, Items={order_details.get('items_count')}")
+        
         if not app.config.get('MAIL_PASSWORD'):
-            logger.error("MAIL_PASSWORD not set. Cannot send email.")
+            logger.error("✗ MAIL_PASSWORD not set. Cannot send email.")
             return False
             
         msg = Message(
@@ -171,17 +207,21 @@ def send_order_email(user_email, order_details):
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True
         thread.start()
-        logger.info(f"Order email thread started for {user_email}")
+        logger.info(f"✓ Order email thread started for {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to start order email thread: {str(e)}")
+        logger.error(f"✗ Failed to start order email thread: {str(e)}")
+        import traceback
+        logger.error(f"  Traceback: {traceback.format_exc()}")
         return False
 
 def send_welcome_email(user_email, username):
     """Send a premium welcome email to new users via Gmail SMTP (Async)"""
     try:
+        logger.info(f"📧 Preparing welcome email for {user_email} (username: {username})")
+        
         if not app.config.get('MAIL_PASSWORD'):
-            logger.error("MAIL_PASSWORD not set. Cannot send welcome email.")
+            logger.error("✗ MAIL_PASSWORD not set. Cannot send welcome email.")
             return False
             
         msg = Message(
@@ -195,10 +235,12 @@ def send_welcome_email(user_email, username):
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True
         thread.start()
-        logger.info(f"Welcome email thread started for {user_email}")
+        logger.info(f"✓ Welcome email thread started for {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to start welcome email thread: {str(e)}")
+        logger.error(f"✗ Failed to start welcome email thread: {str(e)}")
+        import traceback
+        logger.error(f"  Traceback: {traceback.format_exc()}")
         return False
 
 def send_abandoned_cart_email(user_email, username, cart_items):
@@ -228,8 +270,11 @@ def send_abandoned_cart_email(user_email, username, cart_items):
 def send_reset_email(user_email, username, reset_url):
     """Send a secure password reset link via Gmail SMTP (Async)"""
     try:
+        logger.info(f"📧 Preparing password reset email for {user_email} (username: {username})")
+        logger.info(f"   Reset URL: {reset_url}")
+        
         if not app.config.get('MAIL_PASSWORD'):
-            logger.error("MAIL_PASSWORD not set. Cannot send reset email.")
+            logger.error("✗ MAIL_PASSWORD not set. Cannot send reset email.")
             return False
             
         msg = Message(
@@ -245,10 +290,12 @@ def send_reset_email(user_email, username, reset_url):
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True
         thread.start()
-        logger.info(f"Reset email thread started for {user_email}")
+        logger.info(f"✓ Reset email thread started for {user_email}")
         return True
     except Exception as e:
-        logger.error(f"Failed to start reset email thread: {str(e)}")
+        logger.error(f"✗ Failed to start reset email thread: {str(e)}")
+        import traceback
+        logger.error(f"  Traceback: {traceback.format_exc()}")
         return False
 
 @app.context_processor
@@ -1930,6 +1977,27 @@ def cleanup_test_users():
         conn.close()
         
     return redirect(url_for('home'))
+
+@app.route('/admin/test-email')
+@login_required
+def admin_test_email():
+    """Synchronous test for real-time debugging"""
+    if not current_user.is_admin:
+        abort(403)
+    
+    try:
+        msg = Message(
+            "🧪 BuyMo SMTP Test",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
+            recipients=[current_user.email]
+        )
+        msg.body = "If you see this, your SMTP connection is perfect!"
+        
+        # We send this SYNCHRONOUSLY to see the error right now
+        mail.send(msg)
+        return "SUCCESS: Test email sent! Check your inbox."
+    except Exception as e:
+        return f"CRITICAL FAILURE: {str(e)}<br><br>Check Render Env Vars: MAIL_SERVER, MAIL_PORT, MAIL_USE_TLS"
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render
