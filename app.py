@@ -7,7 +7,7 @@ def force_ipv4():
         return [r for r in responses if r[0] == socket.AF_INET]
     socket.getaddrinfo = new_getaddrinfo
 force_ipv4()
-socket.setdefaulttimeout(30)
+socket.setdefaulttimeout(60)
 
 from flask import Flask, render_template, request, redirect, url_for, flash, abort, session, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -158,33 +158,46 @@ def generate_tracking_number():
     return f"BM-{date_str}-{random_str}"
 
 def send_async_email(app, msg):
-    """Send email in a background thread to prevent worker timeouts"""
+    """Send email in a background thread with retry capability"""
     with app.app_context():
-        try:
-            server = app.config.get('MAIL_SERVER')
-            port = app.config.get('MAIL_PORT')
-            username = app.config.get('MAIL_USERNAME')
-            use_tls = app.config.get('MAIL_USE_TLS')
-            use_ssl = app.config.get('MAIL_USE_SSL')
+        # Configuration logging...
+        server = app.config.get('MAIL_SERVER')
+        port = app.config.get('MAIL_PORT')
+        
+        # Try up to 2 times
+        max_retries = 2
+        for attempt in range(1, max_retries + 1):
+            try:
+                if attempt == 1:
+                    logger.info(f"THREAD START (Attempt {attempt}): Sending to {msg.recipients} via {server}:{port}")
+                else:
+                    logger.info(f"THREAD RETRY (Attempt {attempt}): Resending to {msg.recipients}...")
+                
+                # Use the mail instance to send
+                mail.send(msg)
+                
+                logger.info(f"✓ THREAD SUCCESS: Email delivered to {msg.recipients}")
+                return # Success!
+                
+            except socket.timeout as e:
+                logger.error(f"✗ THREAD TIMEOUT (Attempt {attempt}): Connection to {server}:{port} timed out.")
+                if attempt == max_retries:
+                    logger.error("  Giving up after retries.")
+            except Exception as e:
+                logger.error(f"✗ THREAD ERROR (Attempt {attempt}): {str(e)}")
+                if attempt == max_retries:
+                    import traceback
+                    logger.error(f"  Traceback: {traceback.format_exc()}")
             
-            logger.info(f"THREAD START: Attempting email to {msg.recipients}")
-            logger.info(f"THREAD CONFIG: {server}:{port}, TLS={use_tls}, SSL={use_ssl}, From={msg.sender}")
-            
-            # Use the mail instance to send
-            mail.send(msg)
-            
-            logger.info(f"✓ THREAD SUCCESS: Email delivered to {msg.recipients}")
-        except socket.timeout as e:
-            logger.error(f"✗ THREAD TIMEOUT: Connection to {server}:{port} timed out - {str(e)}")
-        except ConnectionRefusedError as e:
-            logger.error(f"✗ THREAD CONNECTION REFUSED: Cannot connect to {server}:{port} - {str(e)}")
-        except Exception as e:
-            error_type = type(e).__name__
-            logger.error(f"✗ THREAD ERROR ({error_type}): Failed to deliver to {msg.recipients}")
-            logger.error(f"  Error details: {str(e)}")
-            # Log the full traceback for debugging
-            import traceback
-            logger.error(f"  Traceback: {traceback.format_exc()}")
+            # Wait a bit before retry if not last attempt
+            if attempt < max_retries:
+                time.sleep(2)
+                # Maybe try to check internet connection?
+                try:
+                    socket.create_connection(("8.8.8.8", 53), timeout=3)
+                except OSError:
+                    logger.error("  Network appears to be unreachable before retry.")
+
 
 def send_order_email(user_email, order_details):
     """Send order confirmation email to customer via Gmail SMTP (Async)"""
