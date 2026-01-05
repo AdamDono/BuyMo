@@ -158,46 +158,64 @@ def generate_tracking_number():
     random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
     return f"BM-{date_str}-{random_str}"
 
+import smtplib
+import ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 def send_async_email(app, msg):
-    """Send email in a background thread with retry capability"""
+    """Send email using native smtplib for maximum reliability"""
     with app.app_context():
-        # Configuration logging...
-        server = app.config.get('MAIL_SERVER')
-        port = app.config.get('MAIL_PORT')
+        # Get config
+        smtp_server = app.config.get('MAIL_SERVER')
+        smtp_port = app.config.get('MAIL_PORT')
+        username = app.config.get('MAIL_USERNAME')
+        password = app.config.get('MAIL_PASSWORD')
+        sender = app.config.get('MAIL_DEFAULT_SENDER')
         
-        # Try up to 2 times
+        # Create raw email message
+        email_msg = MIMEMultipart('alternative')
+        email_msg['Subject'] = msg.subject
+        email_msg['From'] = sender
+        email_msg['To'] = ", ".join(msg.recipients)
+        
+        # Attach HTML content (msg.html is set by the caller)
+        if msg.html:
+            email_msg.attach(MIMEText(msg.html, 'html'))
+        if msg.body:
+            email_msg.attach(MIMEText(msg.body, 'plain'))
+
+        # Retries
         max_retries = 2
         for attempt in range(1, max_retries + 1):
             try:
-                if attempt == 1:
-                    logger.info(f"THREAD START (Attempt {attempt}): Sending to {msg.recipients} via {server}:{port}")
+                logger.info(f"THREAD START (Attempt {attempt}): Connecting to {smtp_server}:{smtp_port}...")
+                
+                # Context for SSL (Port 465)
+                context = ssl.create_default_context()
+                
+                # Use SMTP_SSL for Port 465 (Preferred)
+                if smtp_port == 465:
+                    with smtplib.SMTP_SSL(smtp_server, smtp_port, context=context, timeout=30) as server:
+                        server.login(username, password)
+                        server.sendmail(sender, msg.recipients, email_msg.as_string())
+                # Use SMTP + STARTTLS for Port 587 (Fallback)
                 else:
-                    logger.info(f"THREAD RETRY (Attempt {attempt}): Resending to {msg.recipients}...")
-                
-                # Use the mail instance to send
-                mail.send(msg)
-                
-                logger.info(f"✓ THREAD SUCCESS: Email delivered to {msg.recipients}")
+                    with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
+                        server.starttls(context=context)
+                        server.login(username, password)
+                        server.sendmail(sender, msg.recipients, email_msg.as_string())
+
+                logger.info(f"✓ THREAD SUCCESS: Email sent to {msg.recipients}")
                 return # Success!
-                
-            except socket.timeout as e:
-                logger.error(f"✗ THREAD TIMEOUT (Attempt {attempt}): Connection to {server}:{port} timed out.")
-                if attempt == max_retries:
-                    logger.error("  Giving up after retries.")
+
             except Exception as e:
                 logger.error(f"✗ THREAD ERROR (Attempt {attempt}): {str(e)}")
                 if attempt == max_retries:
                     import traceback
                     logger.error(f"  Traceback: {traceback.format_exc()}")
-            
-            # Wait a bit before retry if not last attempt
-            if attempt < max_retries:
-                time.sleep(2)
-                # Maybe try to check internet connection?
-                try:
-                    socket.create_connection(("8.8.8.8", 53), timeout=3)
-                except OSError:
-                    logger.error("  Network appears to be unreachable before retry.")
+                else:
+                    time.sleep(2)
 
 
 def send_order_email(user_email, order_details):
