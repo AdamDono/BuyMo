@@ -379,16 +379,6 @@ def inject_cart_count():
 
 
 
-@app.route('/admin/cleanup-test-user')
-def cleanup_test_user():
-    """Temporary route to delete test user for email testing"""
-    email = "adamdono100@gmail.com"
-    success = database.delete_user_by_email(email)
-    if success:
-        return jsonify({"status": "success", "message": f"User {email} and all related data deleted."}), 200
-    else:
-        return jsonify({"status": "error", "message": f"User {email} not found or error occurred."}), 400
-
 # Routes
 @app.route('/')
 def index():
