@@ -389,8 +389,8 @@ def cleanup_test_user():
     else:
         return jsonify({"status": "error", "message": f"User {email} not found or error occurred."}), 400
 
-# Error Handler
-@app.errorhandler(404)
+# Routes
+@app.route('/')
 def index():
     """Landing page with featured products and categories"""
     try:
