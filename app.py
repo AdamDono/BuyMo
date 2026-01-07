@@ -164,50 +164,70 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 def send_async_email(app, msg):
-    """Send email using native smtplib with FORCED IPv4 to fix cloud timeouts"""
+    """Send email using Brevo API (HTTP) or fallback to IPv4 SMTP"""
     with app.app_context():
-        # Get config - Default to Gmail settings if not set
+        # Option A: Brevo (Sendinblue) - HTTP API (Bypasses all Firewalls)
+        brevo_key = os.getenv('BREVO_API_KEY')
+        if brevo_key:
+            try:
+                logger.info(f"THREAD START: Sending via Brevo API to {msg.recipients}")
+                url = "https://api.brevo.com/v3/smtp/email"
+                headers = {
+                    "accept": "application/json",
+                    "api-key": brevo_key,
+                    "content-type": "application/json"
+                }
+                
+                # Format for Brevo
+                payload = {
+                    "sender": {"name": "BuyMo", "email": app.config.get('MAIL_USERNAME', 'adamdono100@gmail.com')},
+                    "to": [{"email": r} for r in msg.recipients],
+                    "subject": msg.subject,
+                    "htmlContent": msg.html
+                }
+                
+                response = requests.post(url, json=payload, headers=headers, timeout=10)
+                
+                if response.status_code in [200, 201, 202]:
+                    logger.info(f"✓ THREAD SUCCESS: Email sent via Brevo! ID: {response.json().get('messageId')}")
+                    return
+                else:
+                    logger.error(f"✗ THREAD ERROR: Brevo API failed {response.status_code}")
+                    logger.error(f"  Response: {response.text}")
+                    # Fall through to SMTP if Brevo fails?
+            except Exception as e:
+                logger.error(f"✗ THREAD ERROR: Brevo Request failed: {str(e)}")
+        
+        # Option B: Gmail SMTP - Forced IPv4 (Fallback)
+        # ... (Existing SMTP Logic) ...
         smtp_hostname = app.config.get('MAIL_SERVER', 'smtp.gmail.com')
         smtp_port = int(app.config.get('MAIL_PORT', 465))
         username = app.config.get('MAIL_USERNAME')
         password = app.config.get('MAIL_PASSWORD')
         sender = app.config.get('MAIL_DEFAULT_SENDER')
         
-        # Create raw email message
         email_msg = MIMEMultipart('alternative')
         email_msg['Subject'] = msg.subject
         email_msg['From'] = sender
         email_msg['To'] = ", ".join(msg.recipients)
         
-        # Attach HTML content
         if msg.html:
             email_msg.attach(MIMEText(msg.html, 'html'))
-        if msg.body:
-            email_msg.attach(MIMEText(msg.body, 'plain'))
-
-        # Retries
+        
         max_retries = 2
         for attempt in range(1, max_retries + 1):
             try:
-                # 1. Resolve to IPv4 specifically
-                # This fixes the "Render/AWS tries IPv6 and times out" bug
                 raw_ip = socket.gethostbyname(smtp_hostname)
                 logger.info(f"THREAD START (Attempt {attempt}): Connecting to {smtp_hostname} ({raw_ip}):{smtp_port}...")
                 
-                # Context for SSL
                 context = ssl.create_default_context()
-                
-                # 2. Connect to the IP directly, but tell SSL it's the hostname
                 with smtplib.SMTP_SSL(raw_ip, smtp_port, context=context, timeout=45) as server:
-                    # We must manually verify hostname matches since we connected to IP
-                    server.context.check_hostname = False # Temporarily disable to connect
-                    # (In a strict env we'd pass server_hostname above, but smtplib makes this tricky with IP)
-                    
+                    server.context.check_hostname = False
                     server.login(username, password)
                     server.sendmail(sender, msg.recipients, email_msg.as_string())
 
                 logger.info(f"✓ THREAD SUCCESS: Email sent to {msg.recipients}")
-                return # Success!
+                return
 
             except Exception as e:
                 logger.error(f"✗ THREAD ERROR (Attempt {attempt}): {str(e)}")
@@ -359,8 +379,18 @@ def inject_cart_count():
 
 
 
-# Routes
-@app.route('/')
+@app.route('/admin/cleanup-test-user')
+def cleanup_test_user():
+    """Temporary route to delete test user for email testing"""
+    email = "adamdono100@gmail.com"
+    success = database.delete_user_by_email(email)
+    if success:
+        return jsonify({"status": "success", "message": f"User {email} and all related data deleted."}), 200
+    else:
+        return jsonify({"status": "error", "message": f"User {email} not found or error occurred."}), 400
+
+# Error Handler
+@app.errorhandler(404)
 def index():
     """Landing page with featured products and categories"""
     try:

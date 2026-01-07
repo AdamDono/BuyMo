@@ -294,5 +294,39 @@ def clear_user_reset_token(user_id):
     cur.close()
     return_db_connection(conn)
 
+def delete_user_by_email(email):
+    """Hard delete a user and all their data (for testing cleanup)"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Get user ID first
+        cur.execute('SELECT id FROM users WHERE email = %s', (email,))
+        user = cur.fetchone()
+        
+        if not user:
+            return False
+            
+        user_id = user[0]
+        
+        # Delete related data first (cascade should handle this, but being safe)
+        cur.execute('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = %s)', (user_id,))
+        cur.execute('DELETE FROM orders WHERE user_id = %s', (user_id,))
+        cur.execute('DELETE FROM pending_orders WHERE user_id = %s', (user_id,))
+        cur.execute('DELETE FROM cart_items WHERE user_id = %s', (user_id,))
+        cur.execute('DELETE FROM reviews WHERE user_id = %s', (user_id,))
+        
+        # Finally delete the user
+        cur.execute('DELETE FROM users WHERE id = %s', (user_id,))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error deleting user: {e}")
+        return False
+    finally:
+        cur.close()
+        return_db_connection(conn)
+
 # Call the function to create tables
 create_tables()
