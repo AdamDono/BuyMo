@@ -470,42 +470,67 @@
     </div>
     <div class="products-grid">
         {% for product in featured_products %}
-        <div class="product-card">
-            <!-- Stock Badge -->
-            {% if product[6] <= 5 and product[6]> 0 %}
-                <div class="stock-badge stock-low">
-                    <i class="fas fa-fire"></i> Only {{ product[6] }} left!
-                </div>
-                {% elif product[6] <= 10 and product[6]> 5 %}
-                    <div class="stock-badge stock-medium">
-                        <i class="fas fa-exclamation-triangle"></i> Low Stock
+        <div class="product-card product-card-enhanced">
+            <div class="product-thumb-wrap" style="position: relative;">
+                <!-- Low Stock Badge (Top Left) -->
+                {% if product[6] is defined and product[6] is not none %}
+                {% if product[6] <= 5 and product[6]> 0 %}
+                    <div class="stock-badge stock-critical" style="position: absolute; top: 12px; left: 12px;">
+                        <i class="fas fa-fire"></i> Only {{ product[6] }} left!
                     </div>
-                    {% elif product[6] > 10 %}
-                    <div class="stock-badge stock-high">
-                        <i class="fas fa-check-circle"></i> In Stock
-                    </div>
-                    {% endif %}
+                    {% elif product[6] <= 10 and product[6]> 5 %}
+                        <div class="stock-badge stock-low" style="position: absolute; top: 12px; left: 12px;">
+                            <i class="fas fa-exclamation-triangle"></i> Low Stock
+                        </div>
+                        {% elif product[6] == 0 %}
+                        <div class="stock-badge stock-out" style="position: absolute; top: 12px; left: 12px;">
+                            <i class="fas fa-times-circle"></i> Out of Stock
+                        </div>
+                        {% endif %}
+                        {% endif %}
 
-                    <div class="product-thumb-wrap" style="position: relative;">
-                        <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" class="product-image"
-                            loading="lazy">
-
-                        <!-- Wishlist Heart -->
+                        <!-- Wishlist Heart (Top Right) - Visible to all -->
                         <button class="wishlist-btn" onclick="toggleWishlist(this, {{ product[0] }})"
-                            style="position: absolute; top: 10px; left: 10px; background: white; border: none; border-radius: 50%; width: 35px; height: 35px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2;">
+                            style="position: absolute; top: 12px; right: 12px; background: white; border: none; border-radius: 50%; width: 35px; height: 35px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2;">
                             <i class="{{ 'fas' if current_user.is_authenticated and product[0] in wishlist_ids else 'far' }} fa-heart"
                                 style="color: #ef4444; font-size: 1.2rem; transition: transform 0.2s;"></i>
                         </button>
-                    </div>
 
-                    <div class="product-info">
-                        <div class="product-name">{{ product[1] }}</div>
+                        <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" class="product-image"
+                            loading="lazy">
 
-                        <div class="product-price">{{ product[2] | zar }}</div>
-                        <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
-                            View Details
-                        </a>
-                    </div>
+                        <!-- Quick Add to Cart (Bottom Right) -->
+                        <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}"
+                            class="quick-add-form" style="position: absolute; bottom: 12px; right: 12px; z-index: 2;">
+                            <input type="hidden" name="quantity" value="1" />
+                            <button type="submit" class="quick-add" title="Add to Cart" aria-label="Add to Cart"
+                                style="width: 40px; height: 40px; border-radius: 50%; border: none; background: #076850; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s;">
+                                <i class="fas fa-cart-plus"></i>
+                            </button>
+                        </form>
+            </div>
+
+            <div class="product-info">
+                <div class="product-name">{{ product[1] }}</div>
+
+                <!-- Star Ratings -->
+                {% set rating = (avg_ratings[product[0]] if (avg_ratings is defined and product[0] in avg_ratings) else
+                0) %}
+                {% set review_count = (review_counts[product[0]] if (review_counts is defined and product[0] in
+                review_counts) else 0) %}
+                <div class="rating mb-2" style="color: #f59e0b; font-size: 0.9rem; margin-bottom: 5px;">
+                    {% for i in range(1, 6) %}
+                    <i class="fa{% if i <= rating %}s{% else %}r{% endif %} fa-star"></i>
+                    {% endfor %}
+                    <span class="rating-value" style="color: #6b7280; font-size: 0.8rem; margin-left: 5px;">({{ rating
+                        }}) · {{ review_count }} reviews</span>
+                </div>
+
+                <div class="product-price">{{ product[2] | zar }}</div>
+                <a href="{{ url_for('product', product_id=product[0]) }}" class="btn-view">
+                    View Details
+                </a>
+            </div>
         </div>
         {% endfor %}
     </div>

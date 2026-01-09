@@ -430,6 +430,19 @@ def index():
         except Exception as e:
             logger.error(f"Error fetching user count: {str(e)}")
             total_customers = 0
+
+        # Fetch average ratings and review counts for featured products
+        avg_ratings = {}
+        review_counts = {}
+        # We need to loop through featured_products if they exist
+        if featured_products:
+            for product in featured_products:
+                cur.execute('''
+                    SELECT AVG(rating), COUNT(*) FROM reviews WHERE product_id = %s
+                ''', (product[0],))
+                result = cur.fetchone()
+                avg_ratings[product[0]] = round(result[0], 1) if result[0] else 0
+                review_counts[product[0]] = result[1] if result[1] else 0
         
         cur.close()
         conn.close()
@@ -439,7 +452,9 @@ def index():
                              categories=categories,
                              total_products=total_products,
                              total_orders=total_orders,
-                             total_customers=total_customers)
+                             total_customers=total_customers,
+                             avg_ratings=avg_ratings,
+                             review_counts=review_counts)
     except Exception as e:
         logger.error(f"Critical error in landing page: {str(e)}")
         # Fallback: redirect to signup if landing page fails
