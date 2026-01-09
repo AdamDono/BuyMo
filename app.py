@@ -1688,6 +1688,59 @@ def orders():
 
     return render_template('orders.html', orders=order_history)
 
+@app.route('/admin')
+@login_required
+def admin_dashboard():
+    if not current_user.is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('home'))
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # 1. Stats
+    cur.execute("SELECT SUM(total_amount) FROM orders")
+    total_revenue = cur.fetchone()[0] or 0.0
+    
+    cur.execute("SELECT COUNT(*) FROM orders")
+    total_orders = cur.fetchone()[0]
+    
+    cur.execute("SELECT COUNT(*) FROM users")
+    total_customers = cur.fetchone()[0]
+    
+    cur.execute("SELECT COUNT(*) FROM products WHERE remaining_quantity <= 5")
+    low_stock_count = cur.fetchone()[0]
+    
+    # 2. Chart Data (Last 7 Days)
+    today = datetime.now()
+    chart_labels = []
+    chart_values = []
+    
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        day_str = day.strftime('%Y-%m-%d')
+        chart_labels.append(day.strftime('%a %d')) # e.g., "Mon 05"
+        
+        # Query for specific day
+        cur.execute("""
+            SELECT SUM(total_amount) 
+            FROM orders 
+            WHERE DATE(order_date) = %s
+        """, (day_str,))
+        val = cur.fetchone()[0]
+        chart_values.append(float(val) if val else 0.0)
+        
+    cur.close()
+    conn.close()
+    
+    return render_template('admin_dashboard.html',
+                         total_revenue=total_revenue,
+                         total_orders=total_orders,
+                         total_customers=total_customers,
+                         low_stock_count=low_stock_count,
+                         chart_labels=chart_labels,
+                         chart_values=chart_values)
+
 @app.route('/admin/products')
 @login_required
 def admin_products():

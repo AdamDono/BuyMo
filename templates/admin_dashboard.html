@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - BuyMo{% endblock %}
+
+{% block content %}
+<div class="container spacing-fix">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Admin Dashboard</h1>
+        <div class="text-muted">Overview of store performance</div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-5">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase mb-2"
+                                style="font-size: 0.8rem; letter-spacing: 1px; opacity: 0.8;">Total Revenue</h6>
+                            <h2 class="display-6 fw-bold mb-0">R{{ "{:,.2f}".format(total_revenue) }}</h2>
+                        </div>
+                        <i class="fas fa-wallet fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase mb-2"
+                                style="font-size: 0.8rem; letter-spacing: 1px; opacity: 0.8;">Total Orders</h6>
+                            <h2 class="display-6 fw-bold mb-0">{{ total_orders }}</h2>
+                        </div>
+                        <i class="fas fa-shopping-bag fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase mb-2"
+                                style="font-size: 0.8rem; letter-spacing: 1px; opacity: 0.8;">Customers</h6>
+                            <h2 class="display-6 fw-bold mb-0">{{ total_customers }}</h2>
+                        </div>
+                        <i class="fas fa-users fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase mb-2"
+                                style="font-size: 0.8rem; letter-spacing: 1px; opacity: 0.8;">Low Stock Items</h6>
+                            <h2 class="display-6 fw-bold mb-0">{{ low_stock_count }}</h2>
+                        </div>
+                        <i class="fas fa-exclamation-triangle fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Section -->
+    <div class="row mb-5">
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Sales Overview (Last 7 Days)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="salesChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="{{ url_for('admin_products') }}"
+                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        Manage Products
+                        <i class="fas fa-chevron-right text-muted"></i>
+                    </a>
+                    <a href="{{ url_for('admin_orders') }}"
+                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        View Orders
+                        <i class="fas fa-chevron-right text-muted"></i>
+                    </a>
+                    <a href="{{ url_for('admin_abandoned_carts') }}"
+                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        Abandoned Carts
+                        <i class="fas fa-chevron-right text-muted"></i>
+                    </a>
+                    <a href="{{ url_for('home') }}"
+                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        View Storefront
+                        <i class="fas fa-chevron-right text-muted"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    const salesChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {{ chart_labels | tojson }},
+    datasets: [{
+        label: 'Revenue (ZAR)',
+        data: {{ chart_values | tojson }},
+        borderColor: '#076850',
+        backgroundColor: 'rgba(7, 104, 80, 0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4
+            }]
+        },
+    options: {
+        responsive: true,
+            maintainAspectRatio: false,
+                plugins: {
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                    grid: {
+                    borderDash: [2, 4],
+                        color: '#f0f0f0'
+                },
+                ticks: {
+                    callback: function(value, index, values) {
+                        return 'R' + value;
+                    }
+                }
+            },
+            x: {
+                grid: {
+                    display: false
+                }
+            }
+        }
+    }
+    });
+</script>
+{% endblock %}
