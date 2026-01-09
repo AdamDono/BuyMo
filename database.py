@@ -188,12 +188,24 @@ def create_tables():
         );
     ''')
     
+    # Wishlist table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS wishlist (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, product_id)
+        );
+    ''')
+
     # Create indexes for better performance
     cur.execute('''
         CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
         CREATE INDEX IF NOT EXISTS idx_cart_user ON cart_items(user_id);
         CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
         CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+        CREATE INDEX IF NOT EXISTS idx_wishlist_user ON wishlist(user_id);
     ''')
 
     conn.commit()
@@ -293,6 +305,43 @@ def clear_user_reset_token(user_id):
     conn.commit()
     cur.close()
     return_db_connection(conn)
+
+def toggle_wishlist_item(user_id, product_id):
+    """Toggle a product in the user's wishlist. Returns True if added, False if removed."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Check if exists
+    cur.execute('SELECT id FROM wishlist WHERE user_id = %s AND product_id = %s', (user_id, product_id))
+    exists = cur.fetchone()
+    
+    if exists:
+        cur.execute('DELETE FROM wishlist WHERE id = %s', (exists[0],))
+        added = False
+    else:
+        cur.execute('INSERT INTO wishlist (user_id, product_id) VALUES (%s, %s)', (user_id, product_id))
+        added = True
+        
+    conn.commit()
+    cur.close()
+    return_db_connection(conn)
+    return added
+
+def get_user_wishlist(user_id):
+    """Get all products in a user's wishlist"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT p.* 
+        FROM products p
+        JOIN wishlist w ON p.id = w.product_id
+        WHERE w.user_id = %s
+        ORDER BY w.created_at DESC
+    ''', (user_id,))
+    products = cur.fetchall()
+    cur.close()
+    return_db_connection(conn)
+    return products
 
 # Call the function to create tables
 create_tables()

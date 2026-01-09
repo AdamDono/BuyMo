@@ -851,6 +851,33 @@ def api_cart_count():
         logger.error(f"Error fetching cart count: {str(e)}")
         return jsonify({'count': 0})
 
+@app.context_processor
+def inject_wishlist():
+    """Inject wishlist product IDs into all templates for authenticated users"""
+    if current_user.is_authenticated:
+        # We need a lightweight way to get just IDs. 
+        # Using a new optimized query would be best, but for now we reuse get_user_wishlist
+        # A better approach for scale: create get_user_wishlist_ids(user_id)
+        wishlist_products = database.get_user_wishlist(current_user.id)
+        wishlist_ids = [p[0] for p in wishlist_products]
+        return {'wishlist_ids': wishlist_ids}
+    return {'wishlist_ids': []}
+
+@app.route('/wishlist')
+@login_required
+def wishlist():
+    """View user's wishlist"""
+    products = database.get_user_wishlist(current_user.id)
+    return render_template('wishlist.html', products=products)
+
+@app.route('/wishlist/toggle/<int:product_id>', methods=['POST'])
+@login_required
+def toggle_wishlist(product_id):
+    """Toggle product in wishlist (AJAX)"""
+    added = database.toggle_wishlist_item(current_user.id, product_id)
+    msg = "Added to wishlist" if added else "Removed from wishlist"
+    return jsonify({'status': 'success', 'added': added, 'message': msg})
+
 @app.route('/cart')
 @login_required
 def cart():

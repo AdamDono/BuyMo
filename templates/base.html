@@ -66,7 +66,52 @@
             {% endif %}
             {% endwith %}
         });
-    </script>
+
+        // Global Wishlist Toggle Function
+        window.toggleWishlist = async function (btn, productId) {
+            // Check if user is logged in (simple check if button exists)
+            if (!productId) return;
+
+            try {
+                // Determine animation state
+                const icon = btn.querySelector('i');
+                // Optimistic UI update
+                if (icon.classList.contains('far')) {
+                    icon.classList.replace('far', 'fas');
+                    icon.style.transform = 'scale(1.2)';
+                } else {
+                    icon.classList.replace('fas', 'far');
+                }
+                setTimeout(() => icon.style.transform = 'scale(1)', 200);
+
+                const response = await fetch(`/wishlist/toggle/${productId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    showToast(data.message, 'success');
+                    // Correct UI if optimistic update was wrong
+                    if (data.added) {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                    } else {
+                        icon.classList.remove('fas');
+                        icon.classList.add('far');
+                    }
+                }
+            } catch (error) {
+                console.error('Wishlist error:', error);
+                showToast('Something went wrong', 'error');
+            }
+        }    </script>
     {% block extra_js %}{% endblock %}
 </body>
 
