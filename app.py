@@ -319,6 +319,33 @@ def send_abandoned_cart_email(user_email, username, cart_items):
         logger.error(f"Failed to start abandoned cart email thread: {str(e)}")
         return False
 
+def send_order_status_email(user_email, username, order_id, status):
+    """Send order status update email (Async)"""
+    try:
+        if not app.config.get('MAIL_PASSWORD'):
+            logger.error("MAIL_PASSWORD not set. Cannot send status email.")
+            return False
+            
+        msg = Message(
+            f"Update on your BuyMo Order #{order_id}",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
+            recipients=[user_email]
+        )
+        msg.html = render_template('emails/order_status_update.html', 
+                                 username=username, 
+                                 order_id=order_id,
+                                 status=status,
+                                 year=datetime.now().year)
+        
+        thread = Thread(target=send_async_email, args=(app, msg))
+        thread.daemon = True
+        thread.start()
+        logger.info(f"Order status email thread started for Order #{order_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to start order status email thread: {str(e)}")
+        return False
+
 def send_reset_email(user_email, username, reset_url):
     """Send a secure password reset link via Gmail SMTP (Async)"""
     try:
@@ -1905,12 +1932,27 @@ def admin_update_order_status(order_id):
     cur = conn.cursor()
     
     try:
+        # Get user details for email notification
+        cur.execute('''
+            SELECT u.email, u.username 
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.id = %s
+        ''', (order_id,))
+        user_info = cur.fetchone()
+
+        # Update status
         cur.execute('''
             UPDATE orders 
             SET status = %s, status_updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (new_status, order_id))
         conn.commit()
+        
+        # Send notification email
+        if user_info:
+            send_order_status_email(user_info[0], user_info[1], order_id, new_status)
+            
         flash(f'Order #{order_id} status updated to {new_status.title()}!', 'success')
     except Exception as e:
         conn.rollback()
