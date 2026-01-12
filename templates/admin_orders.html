@@ -9,7 +9,7 @@
         margin: 24px auto;
         padding: 0 16px;
     }
-    
+
     .admin-header {
         background: linear-gradient(135deg, var(--opus-green) 0%, #065c46 100%);
         color: white;
@@ -19,37 +19,37 @@
         text-align: center;
         box-shadow: 0 4px 12px rgba(8, 145, 107, 0.15);
     }
-    
+
     .admin-header h2 {
         margin: 0 0 8px 0;
         font-weight: 700;
         font-size: 2.2rem;
     }
-    
+
     .admin-header p {
         margin: 0;
         opacity: 0.95;
         font-size: 1rem;
     }
-    
+
     .orders-table-container {
         background: white;
         border-radius: 19px;
         border: 1px solid #e5e7eb;
         overflow: hidden;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
-    
+
     .orders-table {
         width: 100%;
         border-collapse: collapse;
     }
-    
+
     .orders-table thead {
         background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
         border-bottom: 2px solid var(--opus-green);
     }
-    
+
     .orders-table th {
         padding: 18px 16px;
         text-align: left;
@@ -59,40 +59,40 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    
+
     .orders-table td {
         padding: 18px 16px;
         border-bottom: 1px solid #f3f4f6;
         color: #374151;
         vertical-align: middle;
     }
-    
+
     .orders-table tbody tr {
         transition: all 0.2s;
     }
-    
+
     .orders-table tbody tr:hover {
         background: linear-gradient(90deg, #f0fdf4 0%, #f9fafb 100%);
         transform: scale(1.002);
     }
-    
+
     .order-id {
         font-weight: 700;
         color: var(--opus-green);
         font-size: 1.05rem;
     }
-    
+
     .customer-name {
         font-weight: 600;
         color: #1f2937;
     }
-    
+
     .customer-info {
         font-size: 0.85rem;
         color: #6b7280;
         margin-top: 2px;
     }
-    
+
     .status-select {
         padding: 8px 14px;
         border: 2px solid transparent;
@@ -104,30 +104,30 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    
+
     .status-select:hover {
         transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
-    
+
     .status-select.processing {
         background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
         color: #1e40af;
         border-color: #93c5fd;
     }
-    
+
     .status-select.shipped {
         background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%);
         color: #6b21a8;
         border-color: #c084fc;
     }
-    
+
     .status-select.delivered {
         background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
         color: #065f46;
         border-color: #6ee7b7;
     }
-    
+
     .btn-update {
         padding: 10px 20px;
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
@@ -139,13 +139,13 @@
         transition: all 0.3s;
         box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
     }
-    
+
     .btn-update:hover {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
-    
+
     .delivery-badge {
         display: inline-flex;
         align-items: center;
@@ -156,7 +156,7 @@
         font-size: 0.85rem;
         color: #6b7280;
     }
-    
+
     .no-orders {
         background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
         padding: 80px 20px;
@@ -164,34 +164,37 @@
         text-align: center;
         border: 2px dashed #e5e7eb;
     }
-    
+
     .no-orders i {
         font-size: 5rem;
         color: #d1d5db;
         margin-bottom: 24px;
         opacity: 0.5;
     }
-    
+
     .no-orders h3 {
         color: #1f2937;
         font-weight: 700;
         margin-bottom: 12px;
     }
-    
+
     .no-orders p {
         color: #6b7280;
     }
-    
+
     @media (max-width: 968px) {
         .orders-table-container {
             overflow-x: auto;
         }
+
         .admin-header {
             padding: 28px 20px;
         }
+
         .admin-header h2 {
             font-size: 1.6rem;
         }
+
         .orders-table th,
         .orders-table td {
             padding: 12px 10px;
@@ -234,26 +237,28 @@
                     <td><strong style="color: #1f2937;">{{ order.total_amount|zar }}</strong></td>
                     <td>
                         {% if order.delivery_method == 'delivery' %}
-                            <span class="delivery-badge">
-                                <i class="fas fa-truck"></i> Delivery
-                            </span>
+                        <span class="delivery-badge">
+                            <i class="fas fa-truck"></i> Delivery
+                        </span>
                         {% else %}
-                            <span class="delivery-badge">
-                                <i class="fas fa-store"></i> Pickup
-                            </span>
+                        <span class="delivery-badge">
+                            <i class="fas fa-store"></i> Pickup
+                        </span>
                         {% endif %}
                     </td>
                     <td>
-                        <form method="POST" action="{{ url_for('admin_update_order_status', order_id=order.id) }}" style="display: inline;">
-                            <select name="status" class="status-select {{ order.status }}" onchange="this.form.submit()">
-                                <option value="processing" {% if order.status == 'processing' %}selected{% endif %}>Processing</option>
-                                <option value="shipped" {% if order.status == 'shipped' %}selected{% endif %}{% if order.status == 'processing' %}{% else %} disabled{% endif %}>Shipped</option>
-                                <option value="delivered" {% if order.status == 'delivered' %}selected{% endif %}{% if order.status == 'shipped' %}{% else %} disabled{% endif %}>Delivered</option>
-                            </select>
-                        </form>
+                        <select name="status" class="status-select {{ order.status }}"
+                            onchange="handleStatusChange(this, {{ order.id }})">
+                            <option value="processing" {% if order.status=='processing' %}selected{% endif %}>Processing
+                            </option>
+                            <option value="shipped" {% if order.status=='shipped' %}selected{% endif %}>Shipped</option>
+                            <option value="delivered" {% if order.status=='delivered' %}selected{% endif %}>Delivered
+                            </option>
+                        </select>
                     </td>
                     <td>
-                        <button onclick="viewOrderDetails({{ order.id }})" class="btn-update" style="background: #3b82f6;">
+                        <button onclick="viewOrderDetails({{ order.id }})" class="btn-update"
+                            style="background: #3b82f6;">
                             <i class="fas fa-eye"></i> View
                         </button>
                     </td>
@@ -263,7 +268,8 @@
         </table>
     </div>
     {% else %}
-    <div style="background: white; padding: 60px 20px; border-radius: 19px; text-align: center; border: 1px solid #e5e7eb;">
+    <div
+        style="background: white; padding: 60px 20px; border-radius: 19px; text-align: center; border: 1px solid #e5e7eb;">
         <i class="fas fa-inbox" style="font-size: 4rem; color: #d1d5db; margin-bottom: 20px;"></i>
         <h3>No Orders Yet</h3>
         <p style="color: #6b7280;">Orders will appear here once customers start purchasing.</p>
@@ -272,26 +278,38 @@
 </div>
 
 <!-- Order Details Modal -->
-<div id="orderModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
-    <div style="background: white; border-radius: 19px; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; padding: 32px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px;">
+<div id="orderModal"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <div
+        style="background: white; border-radius: 19px; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; padding: 32px;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px;">
             <h3 style="margin: 0; color: #1f2937;">Order Details</h3>
-            <button onclick="closeModal()" style="background: none; border: none; font-size: 32px; cursor: pointer; color: #6b7280;">&times;</button>
+            <button onclick="closeModal()"
+                style="background: none; border: none; font-size: 32px; cursor: pointer; color: #6b7280;">&times;</button>
         </div>
         <div id="orderDetails" style="color: #374151;"></div>
     </div>
 </div>
 
+<!-- Status Update Modal -->
+<div id="statusUpdateModal"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 19px; max-width: 500px; width: 90%; padding: 32px;">
+        <div id="statusModalContent"></div>
+    </div>
+</div>
+
 <script>
-function viewOrderDetails(orderId) {
-    // Fetch order details via AJAX
-    fetch(`/admin/order/${orderId}/details`)
-        .then(response => response.json())
-        .then(data => {
-            const modal = document.getElementById('orderModal');
-            const detailsDiv = document.getElementById('orderDetails');
-            
-            let html = `
+    function viewOrderDetails(orderId) {
+        // Fetch order details via AJAX
+        fetch(`/admin/order/${orderId}/details`)
+            .then(response => response.json())
+            .then(data => {
+                const modal = document.getElementById('orderModal');
+                const detailsDiv = document.getElementById('orderDetails');
+
+                let html = `
                 <div style="margin-bottom: 20px;">
                     <h4 style="color: var(--opus-green); margin-bottom: 12px;">📦 Order #${data.id}</h4>
                     <p style="margin: 4px 0;"><strong>Date:</strong> ${data.order_date}</p>
@@ -332,25 +350,187 @@ function viewOrderDetails(orderId) {
                     <h3 style="text-align: right; color: #1f2937; margin: 0;">Total: R${data.total_amount.toFixed(2)}</h3>
                 </div>
             `;
-            
-            detailsDiv.innerHTML = html;
-            modal.style.display = 'flex';
-        })
-        .catch(error => {
-            console.error('Error fetching order details:', error);
-            alert('Failed to load order details');
-        });
-}
 
-function closeModal() {
-    document.getElementById('orderModal').style.display = 'none';
-}
-
-// Close modal when clicking outside
-document.getElementById('orderModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeModal();
+                detailsDiv.innerHTML = html;
+                modal.style.display = 'flex';
+            })
+            .catch(error => {
+                console.error('Error fetching order details:', error);
+                alert('Failed to load order details');
+            });
     }
-});
+
+    function closeModal() {
+        document.getElementById('orderModal').style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('orderModal').addEventListener('click', function (e) {
+        if (e.target === this) {
+            closeModal();
+        }
+    });
+
+    // Status Update Modal System
+    let currentOrderId = null;
+    let currentStatus = null;
+    let previousStatus = null;
+
+    function handleStatusChange(selectElement, orderId) {
+        const newStatus = selectElement.value;
+        const oldStatus = selectElement.getAttribute('data-current-status') || selectElement.options[selectElement.selectedIndex].getAttribute('data-old');
+
+        currentOrderId = orderId;
+        currentStatus = newStatus;
+        previousStatus = oldStatus;
+
+        // If changing to shipped or delivered, show modal
+        if (newStatus === 'shipped') {
+            showShippedModal();
+        } else if (newStatus === 'delivered') {
+            showDeliveredModal();
+        } else {
+            // Processing - simple update
+            submitStatusUpdate({});
+        }
+    }
+
+    function showShippedModal() {
+        const modal = document.getElementById('statusUpdateModal');
+        const content = document.getElementById('statusModalContent');
+
+        content.innerHTML = `
+        <h3 style="margin-top: 0; color: #1f2937; margin-bottom: 20px;">📦 Mark as Shipped</h3>
+        <form id="statusUpdateForm">
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Driver Name</label>
+                <input type="text" name="driver_name" placeholder="e.g., John Smith" 
+                       style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Driver Phone</label>
+                <input type="tel" name="driver_phone" placeholder="e.g., +27 82 123 4567" 
+                       style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Tracking Link (Optional)</label>
+                <input type="url" name="tracking_link" placeholder="https://..." 
+                       style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button type="button" onclick="closeStatusModal()" 
+                        style="flex: 1; padding: 12px; background: #f3f4f6; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        style="flex: 1; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    Confirm Shipment
+                </button>
+            </div>
+        </form>
+    `;
+
+        modal.style.display = 'flex';
+
+        document.getElementById('statusUpdateForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            submitStatusUpdate(data);
+        });
+    }
+
+    function showDeliveredModal() {
+        const modal = document.getElementById('statusUpdateModal');
+        const content = document.getElementById('statusModalContent');
+
+        const now = new Date();
+        const dateTimeLocal = now.toISOString().slice(0, 16);
+
+        content.innerHTML = `
+        <h3 style="margin-top: 0; color: #1f2937; margin-bottom: 20px;">✅ Mark as Delivered</h3>
+        <form id="statusUpdateForm">
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Delivery Time</label>
+                <input type="datetime-local" name="delivered_at" value="${dateTimeLocal}" 
+                       style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Proof of Delivery (Image URL)</label>
+                <input type="url" name="proof_of_delivery" placeholder="https://..." 
+                       style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+                <small style="color: #6b7280; font-size: 12px;">Upload image to Cloudinary/Imgur and paste URL</small>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Delivery Notes (Optional)</label>
+                <textarea name="delivery_notes" placeholder="e.g., Left at front door" rows="3"
+                          style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; resize: vertical;"></textarea>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button type="button" onclick="closeStatusModal()" 
+                        style="flex: 1; padding: 12px; background: #f3f4f6; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        style="flex: 1; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    Confirm Delivery
+                </button>
+            </div>
+        </form>
+    `;
+
+        modal.style.display = 'flex';
+
+        document.getElementById('statusUpdateForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            submitStatusUpdate(data);
+        });
+    }
+
+    function submitStatusUpdate(additionalData) {
+        const formData = new FormData();
+        formData.append('status', currentStatus);
+
+        // Add additional data
+        for (const [key, value] of Object.entries(additionalData)) {
+            if (value) formData.append(key, value);
+        }
+
+        fetch(`/admin/order/${currentOrderId}/update-status`, {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => {
+                if (response.ok) {
+                    closeStatusModal();
+                    location.reload(); // Refresh to show updated status
+                } else {
+                    alert('Failed to update order status');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            });
+    }
+
+    function closeStatusModal() {
+        document.getElementById('statusUpdateModal').style.display = 'none';
+        // Reset dropdown to previous value if cancelled
+        if (previousStatus) {
+            const selects = document.querySelectorAll('select[name="status"]');
+            selects.forEach(select => {
+                // Find the select element for the current order
+                // This assumes orderId is part of the row or can be linked
+                // A more robust way would be to pass the selectElement itself to closeStatusModal
+                // For now, we'll rely on the data-current-status attribute
+                if (select.getAttribute('data-current-status') === previousStatus && select.closest('tr').querySelector('.order-id').textContent.includes(currentOrderId)) {
+                    select.value = previousStatus;
+                }
+            });
+        }
+    }
 </script>
 {% endblock %}

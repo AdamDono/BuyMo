@@ -175,6 +175,56 @@ def create_tables():
         END $$;
     ''')
     
+    # Add driver and delivery tracking columns if they don't exist
+    cur.execute('''
+        DO $$ 
+        BEGIN
+            -- Driver details for shipped orders
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='driver_name'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN driver_name VARCHAR(100);
+            END IF;
+            
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='driver_phone'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN driver_phone VARCHAR(20);
+            END IF;
+            
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='tracking_link'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN tracking_link TEXT;
+            END IF;
+            
+            -- Delivery confirmation details
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='delivered_at'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN delivered_at TIMESTAMP;
+            END IF;
+            
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='proof_of_delivery'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN proof_of_delivery TEXT;
+            END IF;
+            
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='delivery_notes'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN delivery_notes TEXT;
+            END IF;
+        END $$;
+    ''')
+    
     # Order items table for completed order details
     cur.execute('''
         CREATE TABLE IF NOT EXISTS order_items (

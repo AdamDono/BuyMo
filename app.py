@@ -319,7 +319,7 @@ def send_abandoned_cart_email(user_email, username, cart_items):
         logger.error(f"Failed to start abandoned cart email thread: {str(e)}")
         return False
 
-def send_order_status_email(user_email, username, order_id, status):
+def send_order_status_email(user_email, username, order_id, status, **kwargs):
     """Send order status update email (Async)"""
     try:
         if not app.config.get('MAIL_PASSWORD'):
@@ -335,7 +335,13 @@ def send_order_status_email(user_email, username, order_id, status):
                                  username=username, 
                                  order_id=order_id,
                                  status=status,
-                                 year=datetime.now().year)
+                                 year=datetime.now().year,
+                                 driver_name=kwargs.get('driver_name'),
+                                 driver_phone=kwargs.get('driver_phone'),
+                                 tracking_link=kwargs.get('tracking_link'),
+                                 delivered_at=kwargs.get('delivered_at'),
+                                 proof_of_delivery=kwargs.get('proof_of_delivery'),
+                                 delivery_notes=kwargs.get('delivery_notes'))
         
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True
@@ -1353,6 +1359,7 @@ def edit_product(product_id):
             price = float(request.form['price'])
             description = request.form['description']
             category_id = int(request.form['category'])
+            remaining_quantity = int(request.form.get('remaining_quantity', product[5]))  # Get stock or keep current
             image_url = product[4]  # Keep existing image
             image = request.files.get('image')
 
@@ -1386,9 +1393,9 @@ def edit_product(product_id):
 
             cur.execute('''
                 UPDATE products 
-                SET name = %s, price = %s, description = %s, image = %s, category_id = %s
+                SET name = %s, price = %s, description = %s, image = %s, category_id = %s, remaining_quantity = %s
                 WHERE id = %s
-            ''', (name, price, description, image_url, category_id, product_id))
+            ''', (name, price, description, image_url, category_id, remaining_quantity, product_id))
             
             conn.commit()
             flash('Product updated successfully!', 'success')
@@ -1941,17 +1948,71 @@ def admin_update_order_status(order_id):
         ''', (order_id,))
         user_info = cur.fetchone()
 
-        # Update status
-        cur.execute('''
-            UPDATE orders 
-            SET status = %s, status_updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-        ''', (new_status, order_id))
+        # Prepare update query based on status
+        if new_status == 'shipped':
+            # Get driver details from form
+            driver_name = request.form.get('driver_name', '').strip()
+            driver_phone = request.form.get('driver_phone', '').strip()
+            tracking_link = request.form.get('tracking_link', '').strip()
+            
+            cur.execute('''
+                UPDATE orders 
+                SET status = %s, 
+                    status_updated_at = CURRENT_TIMESTAMP,
+                    driver_name = %s,
+                    driver_phone = %s,
+                    tracking_link = %s
+                WHERE id = %s
+            ''', (new_status, driver_name, driver_phone, tracking_link, order_id))
+            
+        elif new_status == 'delivered':
+            # Get delivery confirmation details
+            delivered_at = request.form.get('delivered_at', datetime.now().strftime('%Y-%m-%d %H:%M'))
+            proof_of_delivery = request.form.get('proof_of_delivery', '').strip()  # Image URL from upload
+            delivery_notes = request.form.get('delivery_notes', '').strip()
+            
+            cur.execute('''
+                UPDATE orders 
+                SET status = %s, 
+                    status_updated_at = CURRENT_TIMESTAMP,
+                    delivered_at = %s,
+                    proof_of_delivery = %s,
+                    delivery_notes = %s
+                WHERE id = %s
+            ''', (new_status, delivered_at, proof_of_delivery, delivery_notes, order_id))
+            
+        else:
+            # Processing status - simple update
+            cur.execute('''
+                UPDATE orders 
+                SET status = %s, status_updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (new_status, order_id))
+        
         conn.commit()
         
-        # Send notification email
+        # Fetch updated order details for email
+        cur.execute('''
+            SELECT driver_name, driver_phone, tracking_link, 
+                   delivered_at, proof_of_delivery, delivery_notes
+            FROM orders WHERE id = %s
+        ''', (order_id,))
+        order_details = cur.fetchone()
+        
+        # Send notification email with details
         if user_info:
-            send_order_status_email(user_info[0], user_info[1], order_id, new_status)
+            send_order_status_email(
+                user_info[0], 
+                user_info[1], 
+                order_id, 
+                new_status,
+                driver_name=order_details[0] if order_details else None,
+                driver_phone=order_details[1] if order_details else None,
+                tracking_link=order_details[2] if order_details else None,
+                delivered_at=order_details[3] if order_details else None,
+                proof_of_delivery=order_details[4] if order_details else None,
+                delivery_notes=order_details[5] if order_details else None
+            )
             
         flash(f'Order #{order_id} status updated to {new_status.title()}!', 'success')
     except Exception as e:

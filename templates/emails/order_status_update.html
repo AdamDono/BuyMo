@@ -87,6 +87,49 @@
                 {% endif %}
             </p>
 
+            {% if status == 'shipped' and (driver_name or driver_phone or tracking_link) %}
+            <div
+                style="background: #f0fdf4; border: 1px solid #dcfce7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #076850;">Shipping Details</h3>
+                {% if driver_name %}
+                <p style="margin: 8px 0;"><strong>Driver:</strong> {{ driver_name }}</p>
+                {% endif %}
+                {% if driver_phone %}
+                <p style="margin: 8px 0;"><strong>Contact:</strong> {{ driver_phone }}</p>
+                {% endif %}
+                {% if tracking_link %}
+                <p style="margin: 8px 0;">
+                    <a href="{{ tracking_link }}" style="color: #076850; text-decoration: underline;">Track Your
+                        Package</a>
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if status == 'delivered' %}
+            <div
+                style="background: #f0fdf4; border: 1px solid #dcfce7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #076850;">Delivery Confirmation</h3>
+                {% if delivered_at %}
+                <p style="margin: 8px 0;"><strong>Delivered at:</strong> {{ delivered_at.strftime('%d %b %Y, %H:%M') if
+                    delivered_at is not string else delivered_at }}</p>
+                {% endif %}
+                {% if driver_name %}
+                <p style="margin: 8px 0;"><strong>Delivered by:</strong> {{ driver_name }}</p>
+                {% endif %}
+                {% if proof_of_delivery %}
+                <div style="margin-top: 15px;">
+                    <p style="margin: 8px 0;"><strong>Proof of Delivery:</strong></p>
+                    <img src="{{ proof_of_delivery }}" alt="Proof of Delivery"
+                        style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #ddd;">
+                </div>
+                {% endif %}
+                {% if delivery_notes %}
+                <p style="margin: 8px 0;"><strong>Notes:</strong> {{ delivery_notes }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div style="text-align: center;">
                 <a href="{{ url_for('orders', _external=True) }}" class="btn"
                     style="background-color: #076850; color: #ffffff !important; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">View
