@@ -101,6 +101,19 @@ def create_tables():
         );
     ''')
     
+    # Add is_active column for product toggle functionality
+    cur.execute('''
+        DO $$ 
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='products' AND column_name='is_active'
+            ) THEN
+                ALTER TABLE products ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
+            END IF;
+        END $$;
+    ''')
+    
     # Reviews table
     cur.execute('''
         CREATE TABLE IF NOT EXISTS reviews (
@@ -221,6 +234,21 @@ def create_tables():
                 WHERE table_name='orders' AND column_name='delivery_notes'
             ) THEN
                 ALTER TABLE orders ADD COLUMN delivery_notes TEXT;
+            END IF;
+            
+            -- Shipping dates
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='shipped_date'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN shipped_date TIMESTAMP;
+            END IF;
+            
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='estimated_delivery_date'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN estimated_delivery_date DATE;
             END IF;
         END $$;
     ''')

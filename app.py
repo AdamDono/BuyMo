@@ -341,7 +341,9 @@ def send_order_status_email(user_email, username, order_id, status, **kwargs):
                                  tracking_link=kwargs.get('tracking_link'),
                                  delivered_at=kwargs.get('delivered_at'),
                                  proof_of_delivery=kwargs.get('proof_of_delivery'),
-                                 delivery_notes=kwargs.get('delivery_notes'))
+                                 delivery_notes=kwargs.get('delivery_notes'),
+                                 shipped_date=kwargs.get('shipped_date'),
+                                 estimated_delivery_date=kwargs.get('estimated_delivery_date'))
         
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True
@@ -420,12 +422,13 @@ def index():
         conn = database.get_db_connection()
         cur = conn.cursor()
         
-        # Get featured products (latest 8 products)
+        # Get featured products (latest 8 active products)
         try:
             cur.execute('''
                 SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
                 FROM products p
                 JOIN categories c ON p.category_id = c.id
+                WHERE COALESCE(p.is_active, true) = true
                 ORDER BY p.id DESC
                 LIMIT 8
             ''')
@@ -1462,8 +1465,37 @@ def toggle_product(product_id):
     if not current_user.is_admin:
         abort(403)
     
-    # Toggle functionality disabled - is_active column doesn't exist in current schema
-    flash('Product toggle feature temporarily disabled.', 'info')
+    conn = database.get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Get current status
+        cur.execute('SELECT is_active, name FROM products WHERE id = %s', (product_id,))
+        result = cur.fetchone()
+        
+        if not result:
+            flash('Product not found.', 'error')
+            return redirect(url_for('admin_products'))
+        
+        current_status = result[0]
+        product_name = result[1]
+        new_status = not current_status
+        
+        # Toggle the status
+        cur.execute('UPDATE products SET is_active = %s WHERE id = %s', (new_status, product_id))
+        conn.commit()
+        
+        status_text = "enabled" if new_status else "disabled"
+        flash(f'Product "{product_name}" has been {status_text}.', 'success')
+        
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error toggling product: {str(e)}")
+        flash('Error toggling product status.', 'error')
+    finally:
+        cur.close()
+        conn.close()
+    
     return redirect(url_for('admin_products'))
 
 @app.route('/profile', methods=['GET', 'POST'])
@@ -1789,10 +1821,10 @@ def admin_products():
     cur.execute('''
         SELECT p.id, p.name, p.price, p.remaining_quantity, p.image,
                COUNT(DISTINCT oi.order_id) as order_count,
-               true as is_active
+               COALESCE(p.is_active, true) as is_active
         FROM products p
         LEFT JOIN order_items oi ON p.id = oi.product_id
-        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image
+        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image, p.is_active
         ORDER BY p.id DESC
     ''')
     products = cur.fetchall()
@@ -1954,6 +1986,8 @@ def admin_update_order_status(order_id):
             driver_name = request.form.get('driver_name', '').strip()
             driver_phone = request.form.get('driver_phone', '').strip()
             tracking_link = request.form.get('tracking_link', '').strip()
+            shipped_date = request.form.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
+            estimated_delivery_date = request.form.get('estimated_delivery_date', '')
             
             cur.execute('''
                 UPDATE orders 
@@ -1961,9 +1995,11 @@ def admin_update_order_status(order_id):
                     status_updated_at = CURRENT_TIMESTAMP,
                     driver_name = %s,
                     driver_phone = %s,
-                    tracking_link = %s
+                    tracking_link = %s,
+                    shipped_date = %s,
+                    estimated_delivery_date = %s
                 WHERE id = %s
-            ''', (new_status, driver_name, driver_phone, tracking_link, order_id))
+            ''', (new_status, driver_name, driver_phone, tracking_link, shipped_date, estimated_delivery_date, order_id))
             
         elif new_status == 'delivered':
             # Get delivery confirmation details
@@ -1994,7 +2030,8 @@ def admin_update_order_status(order_id):
         # Fetch updated order details for email
         cur.execute('''
             SELECT driver_name, driver_phone, tracking_link, 
-                   delivered_at, proof_of_delivery, delivery_notes
+                   delivered_at, proof_of_delivery, delivery_notes,
+                   shipped_date, estimated_delivery_date
             FROM orders WHERE id = %s
         ''', (order_id,))
         order_details = cur.fetchone()
@@ -2011,7 +2048,9 @@ def admin_update_order_status(order_id):
                 tracking_link=order_details[2] if order_details else None,
                 delivered_at=order_details[3] if order_details else None,
                 proof_of_delivery=order_details[4] if order_details else None,
-                delivery_notes=order_details[5] if order_details else None
+                delivery_notes=order_details[5] if order_details else None,
+                shipped_date=order_details[6] if order_details else None,
+                estimated_delivery_date=order_details[7] if order_details else None
             )
             
         flash(f'Order #{order_id} status updated to {new_status.title()}!', 'success')

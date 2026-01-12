@@ -378,11 +378,27 @@
 
     function handleStatusChange(selectElement, orderId) {
         const newStatus = selectElement.value;
-        const oldStatus = selectElement.getAttribute('data-current-status') || selectElement.options[selectElement.selectedIndex].getAttribute('data-old');
+        const oldStatus = selectElement.getAttribute('data-old-status') || selectElement.getAttribute('data-current-status') || selectElement.options[selectElement.selectedIndex].getAttribute('data-old');
+
+        // Prevent backwards progression
+        if (oldStatus === 'delivered') {
+            alert('Cannot change status of a delivered order.');
+            selectElement.value = oldStatus;
+            return;
+        }
+
+        if (oldStatus === 'shipped' && newStatus === 'processing') {
+            alert('Cannot move shipped order back to processing.');
+            selectElement.value = oldStatus;
+            return;
+        }
 
         currentOrderId = orderId;
         currentStatus = newStatus;
         previousStatus = oldStatus;
+
+        // Store old status for future reference
+        selectElement.setAttribute('data-old-status', oldStatus);
 
         // If changing to shipped or delivered, show modal
         if (newStatus === 'shipped') {
@@ -399,6 +415,14 @@
         const modal = document.getElementById('statusUpdateModal');
         const content = document.getElementById('statusModalContent');
 
+        const now = new Date();
+        const shippedDateTime = now.toISOString().slice(0, 16);
+
+        // Calculate estimated delivery (3 days from now)
+        const estimatedDate = new Date(now);
+        estimatedDate.setDate(estimatedDate.getDate() + 3);
+        const estimatedDateStr = estimatedDate.toISOString().slice(0, 10);
+
         content.innerHTML = `
         <h3 style="margin-top: 0; color: #1f2937; margin-bottom: 20px;">📦 Mark as Shipped</h3>
         <form id="statusUpdateForm">
@@ -408,8 +432,19 @@
                        style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
             </div>
             <div style="margin-bottom: 16px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Driver Phone</label>
-                <input type="tel" name="driver_phone" placeholder="e.g., +27 82 123 4567" 
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Driver Phone (10 digits)</label>
+                <input type="tel" name="driver_phone" placeholder="0821234567" pattern="[0-9]{10}" maxlength="10"
+                       style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+                <small style="color: #6b7280; font-size: 12px;">Enter 10 digits only (e.g., 0821234567)</small>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Shipped Date & Time</label>
+                <input type="datetime-local" name="shipped_date" value="${shippedDateTime}" 
+                       style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #374151;">Estimated Delivery Date</label>
+                <input type="date" name="estimated_delivery_date" value="${estimatedDateStr}" 
                        style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
             </div>
             <div style="margin-bottom: 20px;">
@@ -432,12 +467,17 @@
 
         modal.style.display = 'flex';
 
-        document.getElementById('statusUpdateForm').addEventListener('submit', function (e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            const data = Object.fromEntries(formData.entries());
-            submitStatusUpdate(data);
-        });
+        setTimeout(() => {
+            const form = document.getElementById('statusUpdateForm');
+            if (form) {
+                form.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    const formData = new FormData(this);
+                    const data = Object.fromEntries(formData.entries());
+                    submitStatusUpdate(data);
+                });
+            }
+        }, 100);
     }
 
     function showDeliveredModal() {
@@ -481,12 +521,17 @@
 
         modal.style.display = 'flex';
 
-        document.getElementById('statusUpdateForm').addEventListener('submit', function (e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            const data = Object.fromEntries(formData.entries());
-            submitStatusUpdate(data);
-        });
+        setTimeout(() => {
+            const form = document.getElementById('statusUpdateForm');
+            if (form) {
+                form.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    const formData = new FormData(this);
+                    const data = Object.fromEntries(formData.entries());
+                    submitStatusUpdate(data);
+                });
+            }
+        }, 100);
     }
 
     function submitStatusUpdate(additionalData) {
@@ -532,5 +577,12 @@
             });
         }
     }
+
+    // Initialize old status on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('select[name="status"]').forEach(select => {
+            select.setAttribute('data-old-status', select.value);
+        });
+    });
 </script>
 {% endblock %}
