@@ -354,6 +354,53 @@ def send_order_status_email(user_email, username, order_id, status, **kwargs):
         logger.error(f"Failed to start order status email thread: {str(e)}")
         return False
 
+def send_inventory_alert(product_name, current_stock):
+    """Notify admin when stock is low (<= 5)"""
+    try:
+        with app.app_context():
+            admin_email = app.config.get('MAIL_DEFAULT_SENDER')
+            if not admin_email:
+                logger.warning("No admin email configured for inventory alerts")
+                return
+
+            msg = Message(
+                f'⚠️ Low Stock Alert: {product_name}',
+                recipients=[admin_email]
+            )
+            msg.body = f"""
+Low Stock Alert for BuyMo
+
+Product: {product_name}
+Current Stock: {current_stock}
+
+Please restock this item as soon as possible to avoid losing sales.
+
+View Admin Dashboard: {url_for('admin_products', _external=True)}
+            """
+            
+            # Use simple HTML for the alert
+            msg.html = f"""
+            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                <h2 style="color: #ef4444;">⚠️ Low Stock Alert</h2>
+                <p>The following product is almost out of stock:</p>
+                <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 5px 0;"><strong>Product:</strong> {product_name}</p>
+                    <p style="margin: 5px 0;"><strong>Remaining Quantity:</strong> <span style="color: #ef4444; font-weight: bold;">{current_stock}</span></p>
+                </div>
+                <a href="{url_for('admin_products', _external=True)}" 
+                   style="display: inline-block; padding: 12px 24px; background: #076850; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                   Manage Inventory
+                </a>
+            </div>
+            """
+            
+            thread = Thread(target=send_async_email, args=(app, msg))
+            thread.daemon = True
+            thread.start()
+            logger.info(f"Inventory alert sent for {product_name}")
+    except Exception as e:
+        logger.error(f"Error sending inventory alert: {str(e)}")
+
 def send_reset_email(user_email, username, reset_url):
     """Send a secure password reset link via Gmail SMTP (Async)"""
     try:
@@ -851,6 +898,22 @@ def add_to_cart(product_id):
     cur = conn.cursor()
 
     try:
+        # Check current stock
+        cur.execute('SELECT remaining_quantity, name FROM products WHERE id = %s', (product_id,))
+        product = cur.fetchone()
+        
+        if not product:
+            flash('Product not found.', 'error')
+            return redirect(url_for('home'))
+            
+        if product[0] <= 0:
+            flash(f'Sorry, {product[1]} is currently out of stock. You can add it to your wishlist!', 'error')
+            return redirect(url_for('product', product_id=product_id))
+
+        if quantity > product[0]:
+            flash(f'Only {product[0]} units of {product[1]} available.', 'warning')
+            quantity = product[0]
+
         cur.execute('''
             SELECT id, quantity FROM cart_items 
             WHERE user_id = %s AND product_id = %s;
@@ -859,6 +922,11 @@ def add_to_cart(product_id):
 
         if cart_item:
             new_quantity = cart_item[1] + quantity
+            # Ensure total cart quantity doesn't exceed stock
+            if new_quantity > product[0]:
+                new_quantity = product[0]
+                flash(f'Cart updated, but limited to available stock ({product[0]} units).', 'info')
+                
             cur.execute('''
                 UPDATE cart_items 
                 SET quantity = %s 
@@ -879,12 +947,12 @@ def add_to_cart(product_id):
         flash('Product added to cart!', 'success')
     except Exception as e:
         logger.error(f"Error adding to cart: {str(e)}")
-        flash('An error occurred while adding the product to the cart.', 'error')
+        flash('Could not add product to cart.', 'error')
     finally:
         cur.close()
         conn.close()
-
-    return redirect(url_for('cart'))
+        
+    return redirect(request.referrer or url_for('home'))
 
 @app.route('/api/cart-count')
 @login_required
@@ -1016,6 +1084,68 @@ def checkout():
                              today=date.today().isoformat())
     
     # POST: Process checkout and redirect to PayFast
+    # ... (rest of the code)
+
+@app.route('/apply-coupon', methods=['POST'])
+@login_required
+def apply_coupon():
+    """Validate and calculate discount for a coupon code"""
+    code = request.json.get('code', '').strip().upper()
+    subtotal = float(request.json.get('subtotal', 0))
+    
+    if not code:
+        return jsonify({'success': False, 'message': 'Please enter a coupon code.'})
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute('''
+            SELECT discount_type, discount_value, min_purchase, usage_limit, usage_count, valid_until, is_active
+            FROM coupons WHERE code = %s
+        ''', (code,))
+        coupon = cur.fetchone()
+        
+        if not coupon:
+            return jsonify({'success': False, 'message': 'Invalid coupon code.'})
+            
+        discount_type, discount_value, min_purchase, usage_limit, usage_count, valid_until, is_active = coupon
+        
+        if not is_active:
+            return jsonify({'success': False, 'message': 'This coupon is no longer active.'})
+            
+        if valid_until and valid_until < datetime.now():
+            return jsonify({'success': False, 'message': 'This coupon has expired.'})
+            
+        if usage_limit and usage_count >= usage_limit:
+            return jsonify({'success': False, 'message': 'This coupon has reached its usage limit.'})
+            
+        if subtotal < float(min_purchase):
+            return jsonify({'success': False, 'message': f'Minimum purchase of {zar_filter(min_purchase)} required for this coupon.'})
+            
+        # Calculate discount
+        discount_amount = 0
+        if discount_type == 'percent':
+            discount_amount = subtotal * (float(discount_value) / 100.0)
+        else:
+            discount_amount = float(discount_value)
+            
+        # Ensure discount doesn't exceed subtotal
+        discount_amount = min(discount_amount, subtotal)
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Coupon "{code}" applied!',
+            'discount_amount': discount_amount,
+            'code': code
+        })
+        
+    except Exception as e:
+        logger.error(f"Error applying coupon: {str(e)}")
+        return jsonify({'success': False, 'message': 'An error occurred. Please try again.'})
+    finally:
+        cur.close()
+        conn.close()
     try:
         session['user_id'] = current_user.id
 
@@ -1038,6 +1168,22 @@ def checkout():
 
         subtotal = float(sum(item[3] * item[1] for item in cart_items))
         
+        # Get coupon info
+        coupon_code = request.form.get('coupon_code', '').strip().upper()
+        discount_amount = 0.0
+        
+        if coupon_code:
+            cur.execute('SELECT discount_type, discount_value, min_purchase FROM coupons WHERE code = %s AND is_active = TRUE', (coupon_code,))
+            coupon = cur.fetchone()
+            if coupon:
+                d_type, d_val, min_p = coupon
+                if subtotal >= float(min_p):
+                    if d_type == 'percent':
+                        discount_amount = subtotal * (float(d_val) / 100.0)
+                    else:
+                        discount_amount = float(d_val)
+                    discount_amount = min(discount_amount, subtotal)
+
         # Get delivery info from form
         delivery_method = request.form.get('delivery_method', 'delivery')
         full_name = request.form.get('full_name')
@@ -1061,7 +1207,7 @@ def checkout():
             postal_code = None
             pickup_date = request.form.get('pickup_date')
         
-        total_price = subtotal + delivery_fee
+        total_price = subtotal + delivery_fee - discount_amount
 
         # Prepare delivery info JSON
         delivery_info = {
@@ -1074,7 +1220,9 @@ def checkout():
             'province': province,
             'postal_code': postal_code,
             'pickup_date': pickup_date,
-            'delivery_fee': float(delivery_fee)
+            'delivery_fee': float(delivery_fee),
+            'discount_amount': float(discount_amount),
+            'coupon_code': coupon_code
         }
         
         cart_items_json = json.dumps([{
@@ -1198,9 +1346,9 @@ def payfast_notify():
                 INSERT INTO orders (
                     user_id, tracking_number, total_amount, delivery_method, full_name, phone,
                     street_address, suburb, city, province, postal_code,
-                    delivery_fee, pickup_date, status
+                    delivery_fee, pickup_date, status, discount_amount, coupon_code
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 user_id,
@@ -1216,9 +1364,16 @@ def payfast_notify():
                 delivery_info.get('postal_code'),
                 delivery_info.get('delivery_fee', 0),
                 delivery_info.get('pickup_date'),
-                'processing'
+                'processing',
+                delivery_info.get('discount_amount', 0),
+                delivery_info.get('coupon_code')
             ))
             order_id = cur.fetchone()[0]
+
+            # Update coupon usage count if used
+            c_code = delivery_info.get('coupon_code')
+            if c_code:
+                cur.execute('UPDATE coupons SET usage_count = usage_count + 1 WHERE code = %s', (c_code,))
 
             for item in cart_items:
                 cur.execute('''
@@ -1231,7 +1386,13 @@ def payfast_notify():
                     UPDATE products 
                     SET remaining_quantity = remaining_quantity - %s
                     WHERE id = %s
+                    RETURNING name, remaining_quantity
                 ''', (item['quantity'], item['product_id']))
+                res = cur.fetchone()
+                if res:
+                    p_name, p_qty = res
+                    if p_qty <= 5:
+                        send_inventory_alert(p_name, p_qty)
 
             cur.execute('''
                 DELETE FROM cart_items 
@@ -1552,7 +1713,9 @@ def profile():
         conn = database.get_db_connection()
         cur = conn.cursor()
         cur.execute('''
-            SELECT id, total_amount, status, order_date, tracking_number 
+            SELECT id, total_amount, status, order_date, tracking_number,
+                   driver_name, driver_phone, tracking_link, delivered_at,
+                   proof_of_delivery, delivery_notes, shipped_date, estimated_delivery_date
             FROM orders 
             WHERE user_id = %s 
             ORDER BY order_date DESC
@@ -2287,6 +2450,99 @@ def admin_test_email():
         return "SUCCESS: Test email sent! Check your inbox."
     except Exception as e:
         return f"CRITICAL FAILURE: {str(e)}<br><br>Check Render Env Vars: MAIL_SERVER, MAIL_PORT, MAIL_USE_TLS"
+
+@app.route('/admin/coupons')
+@login_required
+def admin_coupons():
+    if current_user.role != 'admin':
+        return redirect(url_for('home'))
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT id, code, discount_type, discount_value, min_purchase, usage_limit, usage_count, valid_until, is_active FROM coupons ORDER BY id DESC')
+    coupons = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('admin_coupons.html', coupons=coupons)
+
+@app.route('/admin/coupons/add', methods=['POST'])
+@login_required
+def add_coupon():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+        
+    code = request.form.get('code', '').strip().upper()
+    discount_type = request.form.get('discount_type')
+    discount_value = float(request.form.get('discount_value', 0))
+    min_purchase = float(request.form.get('min_purchase', 0))
+    usage_limit = request.form.get('usage_limit')
+    valid_until = request.form.get('valid_until')
+    
+    if not code:
+        flash('Coupon code is required.', 'error')
+        return redirect(url_for('admin_coupons'))
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute('''
+            INSERT INTO coupons (code, discount_type, discount_value, min_purchase, usage_limit, valid_until)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (code, discount_type, discount_value, min_purchase, 
+              int(usage_limit) if usage_limit and usage_limit.strip() else None, 
+              valid_until if valid_until and valid_until.strip() else None))
+        conn.commit()
+        flash(f'Coupon {code} added successfully!', 'success')
+    except Exception as e:
+        logger.error(f"Error adding coupon: {e}")
+        flash('Error adding coupon. Code might already exist.', 'error')
+    finally:
+        cur.close()
+        conn.close()
+        
+    return redirect(url_for('admin_coupons'))
+
+@app.route('/admin/coupons/toggle/<int:coupon_id>', methods=['POST'])
+@login_required
+def toggle_coupon(coupon_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute('UPDATE coupons SET is_active = NOT is_active WHERE id = %s', (coupon_id,))
+        conn.commit()
+        flash('Coupon status updated.', 'success')
+    except Exception as e:
+        logger.error(f"Error toggling coupon: {e}")
+        flash('Error updating coupon status.', 'error')
+    finally:
+        cur.close()
+        conn.close()
+        
+    return redirect(url_for('admin_coupons'))
+
+@app.route('/admin/coupons/delete/<int:coupon_id>', methods=['POST'])
+@login_required
+def delete_coupon(coupon_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute('DELETE FROM coupons WHERE id = %s', (coupon_id,))
+        conn.commit()
+        flash('Coupon deleted permanently.', 'success')
+    except Exception as e:
+        logger.error(f"Error deleting coupon: {e}")
+        flash('Error deleting coupon.', 'error')
+    finally:
+        cur.close()
+        conn.close()
+        
+    return redirect(url_for('admin_coupons'))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render

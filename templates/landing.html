@@ -500,6 +500,7 @@
                             loading="lazy">
 
                         <!-- Quick Add to Cart (Bottom Right) -->
+                        {% if product[6] > 0 %}
                         <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}"
                             class="quick-add-form" style="position: absolute; bottom: 12px; right: 12px; z-index: 2;">
                             <input type="hidden" name="quantity" value="1" />
@@ -508,6 +509,7 @@
                                 <i class="fas fa-cart-plus"></i>
                             </button>
                         </form>
+                        {% endif %}
             </div>
 
             <div class="product-info">

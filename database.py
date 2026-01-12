@@ -250,8 +250,42 @@ def create_tables():
             ) THEN
                 ALTER TABLE orders ADD COLUMN estimated_delivery_date DATE;
             END IF;
+            
+            -- Order discount info
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='discount_amount'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN discount_amount DECIMAL(10, 2) DEFAULT 0.00;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='orders' AND column_name='coupon_code'
+            ) THEN
+                ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(20);
+            END IF;
         END $$;
     ''')
+    
+    # Coupons table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS coupons (
+            id SERIAL PRIMARY KEY,
+            code VARCHAR(20) UNIQUE NOT NULL,
+            discount_type VARCHAR(10) NOT NULL, -- 'percent' or 'fixed'
+            discount_value DECIMAL(10, 2) NOT NULL,
+            min_purchase DECIMAL(10, 2) DEFAULT 0.00,
+            is_active BOOLEAN DEFAULT TRUE,
+            valid_from TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            valid_until TIMESTAMP,
+            usage_limit INTEGER DEFAULT NULL,
+            usage_count INTEGER DEFAULT 0
+        );
+    ''')
+    
+    # Add index for coupon lookups
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(code);')
     
     # Order items table for completed order details
     cur.execute('''

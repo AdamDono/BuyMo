@@ -116,7 +116,18 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="#" class="btn btn-sm btn-outline-primary">View</a>
+                            <button type="button" class="btn btn-sm btn-outline-primary view-order-btn"
+                                data-order-id="{{ order[0] }}" data-status="{{ order[2] }}"
+                                data-date="{{ order[3].strftime('%d %b %Y') }}" data-total="{{ order[1] | zar }}"
+                                data-tracking="{{ order[4] or '' }}" data-driver-name="{{ order[5] or '' }}"
+                                data-driver-phone="{{ order[6] or '' }}" data-tracking-link="{{ order[7] or '' }}"
+                                data-delivered-at="{{ order[8] or '' }}" data-pod="{{ order[9] or '' }}"
+                                data-notes="{{ order[10] or '' }}"
+                                data-shipped-date="{{ order[11].strftime('%d %b %Y, %H:%M') if order[11] else '' }}"
+                                data-est-delivery="{{ order[12].strftime('%d %b %Y') if order[12] else '' }}"
+                                onclick="viewOrderDetails(this)">
+                                <i class="fas fa-eye"></i> View
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -132,6 +143,149 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Order Details Modal -->
+<div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="border-radius: 20px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title" id="modalOrderId" style="font-weight: 800; color: #1f2937;">Order Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-4">
+                    <!-- Basic Info -->
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-3 h-100">
+                            <h6 style="color: #6b7280; text-transform: uppercase; font-size: 12px; font-weight: 700;">
+                                Order Info</h6>
+                            <p class="mb-1"><strong>Status:</strong> <span id="modalStatus" class="badge"></span></p>
+                            <p class="mb-1"><strong>Date:</strong> <span id="modalDate"></span></p>
+                            <p class="mb-0"><strong>Total:</strong> <span id="modalTotal"></span></p>
+                        </div>
+                    </div>
+                    <!-- Shipping Info -->
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-3 h-100">
+                            <h6 style="color: #6b7280; text-transform: uppercase; font-size: 12px; font-weight: 700;">
+                                Logistics</h6>
+                            <p class="mb-1"><strong>Tracking:</strong> <span id="modalTracking"></span></p>
+                            <p class="mb-1"><strong>Shipped On:</strong> <span id="modalShippedDate"></span></p>
+                            <p class="mb-0"><strong>Estimated Delivery:</strong> <span id="modalEstDelivery"></span></p>
+                        </div>
+                    </div>
+
+                    <!-- Driver Info -->
+                    <div class="col-12" id="modalDriverSection" style="display: none;">
+                        <div class="p-3 border rounded-3"
+                            style="border-color: #dcfce7 !important; background: #f0fdf4;">
+                            <h6 style="color: #076850; text-transform: uppercase; font-size: 12px; font-weight: 700;">
+                                Driver Details</h6>
+                            <div class="d-flex align-items-center gap-3 mt-2">
+                                <div class="bg-white p-2 rounded-circle shadow-sm">🚚</div>
+                                <div>
+                                    <p class="mb-0"><strong>Name:</strong> <span id="modalDriverName"></span></p>
+                                    <p class="mb-0"><strong>Phone:</strong> <span id="modalDriverPhone"></span></p>
+                                    <p class="mb-0" id="modalTrackingLinkRow" style="display: none;">
+                                        <a href="" id="modalTrackingLink" target="_blank"
+                                            class="btn btn-sm btn-success mt-2" style="background: #076850;">
+                                            <i class="fas fa-map-marker-alt"></i> Live Tracking
+                                        </a>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Delivery Confirmation -->
+                    <div class="col-12" id="modalDeliverySection" style="display: none;">
+                        <div class="p-3 border rounded-3 bg-white">
+                            <h6 style="color: #6b7280; text-transform: uppercase; font-size: 12px; font-weight: 700;">
+                                Delivery Confirmation</h6>
+                            <p class="mt-2"><strong>Delivered At:</strong> <span id="modalDeliveredAt"></span></p>
+                            <div id="modalPodSection" style="display: none;" class="mt-3">
+                                <strong>Proof of Delivery:</strong>
+                                <img src="" id="modalPodImage" class="img-fluid rounded-3 mt-2 shadow-sm"
+                                    style="max-height: 300px; display: block;">
+                            </div>
+                            <div id="modalNotesSection" style="display: none;" class="mt-2 text-muted italic">
+                                <em>Notes: <span id="modalNotes"></span></em>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
+                    style="border-radius: 10px;">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function viewOrderDetails(btn) {
+        const data = btn.dataset;
+
+        // Set basic info
+        document.getElementById('modalOrderId').textContent = 'Order #' + data.orderId;
+        document.getElementById('modalDate').textContent = data.date;
+        document.getElementById('modalTotal').textContent = data.total;
+        document.getElementById('modalTracking').textContent = data.tracking || 'Pending';
+        document.getElementById('modalShippedDate').textContent = data.shippedDate || 'Processing';
+        document.getElementById('modalEstDelivery').textContent = data.estDelivery || '-';
+
+        // Set status badge
+        const statusLabel = document.getElementById('modalStatus');
+        statusLabel.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+        statusLabel.className = 'badge ' + (
+            data.status === 'delivered' ? 'bg-success' :
+                data.status === 'shipped' ? 'bg-primary' :
+                    data.status === 'cancelled' ? 'bg-danger' : 'bg-warning text-dark'
+        );
+
+        // Driver info
+        if (data.driverName || data.driverPhone) {
+            document.getElementById('modalDriverSection').style.display = 'block';
+            document.getElementById('modalDriverName').textContent = data.driverName || 'N/A';
+            document.getElementById('modalDriverPhone').textContent = data.driverPhone || 'N/A';
+
+            if (data.trackingLink) {
+                document.getElementById('modalTrackingLinkRow').style.display = 'block';
+                document.getElementById('modalTrackingLink').href = data.trackingLink;
+            } else {
+                document.getElementById('modalTrackingLinkRow').style.display = 'none';
+            }
+        } else {
+            document.getElementById('modalDriverSection').style.display = 'none';
+        }
+
+        // Delivery info
+        if (data.status === 'delivered') {
+            document.getElementById('modalDeliverySection').style.display = 'block';
+            document.getElementById('modalDeliveredAt').textContent = data.deliveredAt || 'N/A';
+
+            if (data.pod) {
+                document.getElementById('modalPodSection').style.display = 'block';
+                document.getElementById('modalPodImage').src = data.pod;
+            } else {
+                document.getElementById('modalPodSection').style.display = 'none';
+            }
+
+            if (data.notes) {
+                document.getElementById('modalNotesSection').style.display = 'block';
+                document.getElementById('modalNotes').textContent = data.notes;
+            } else {
+                document.getElementById('modalNotesSection').style.display = 'none';
+            }
+        } else {
+            document.getElementById('modalDeliverySection').style.display = 'none';
+        }
+
+        // Show modal
+        new bootstrap.Modal(document.getElementById('orderDetailsModal')).show();
+    }
+</script>
 
 <script src="{{ url_for('static', filename='js/profile.js') }}"></script>
 {% endblock %}

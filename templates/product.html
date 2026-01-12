@@ -176,12 +176,12 @@
 
       <p class="description">{{ product[3] }}</p>
 
-      <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="product-actions">
+      <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="product-actions" {% if
+        product[5] <=0 %}style="opacity: 0.6;" {% endif %}>
         <input type="number" id="quantity" name="quantity" class="form-control quantity-input" value="1" min="1"
-          max="{{ product[5] if product[5] else 10 }}">
-        <button type="submit" class="btn btn-primary" style="flex: 1;">
-          <i class="fas fa-cart-plus"></i> Add to Cart
-        </button>
+          max="{{ product[5] if product[5] else 10 }}" {% if product[5] <=0 %}disabled{% endif %}>
+        <button type="submit" class="btn btn-primary" style="flex: 1;" {% if product[5] <=0 %}disabled{% endif %}>
+          <i class="fas fa-cart-plus"></i> {% if product[5] <= 0 %}Sold Out{% else %}Add to Cart{% endif %} </button>
       </form>
     </div>
   </div>
