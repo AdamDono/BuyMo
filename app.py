@@ -100,15 +100,6 @@ def format_zar(amount):
 def resolve_image(image_path):
     if not image_path:
         return url_for('static', filename='uploads/default-product.png')
-    
-    # If it's a Cloudinary URL, inject optimization parameters
-    if 'res.cloudinary.com' in image_path and '/upload/' in image_path:
-        # q_auto: automatic quality compression
-        # f_auto: automatic format selection (WebP/AVIF for modern browsers)
-        # c_limit,w_800: resize if too large
-        optimized_path = image_path.replace('/upload/', '/upload/f_auto,q_auto,c_limit,w_800/')
-        return optimized_path
-        
     if image_path.startswith('http') or image_path.startswith('https'):
         return image_path
     return url_for('static', filename=image_path)
@@ -263,6 +254,67 @@ def send_reset_email(user_email, username, reset_url):
         logger.error(f"Failed to start reset email thread: {str(e)}")
         return False
 
+def send_order_status_email(user_email, username, order_id, status, **kwargs):
+    """Send order status update email (Async)"""
+    try:
+        if not app.config.get('MAIL_PASSWORD'):
+            logger.error("MAIL_PASSWORD not set. Cannot send status email.")
+            return False
+            
+        msg = Message(
+            f"Update on your BuyMo Order #{order_id}",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
+            recipients=[user_email]
+        )
+        msg.html = render_template('emails/order_status_update.html', 
+                                 username=username, 
+                                 order_id=order_id,
+                                 status=status,
+                                 year=datetime.now().year,
+                                 driver_name=kwargs.get('driver_name'),
+                                 driver_phone=kwargs.get('driver_phone'),
+                                 tracking_link=kwargs.get('tracking_link'),
+                                 delivered_at=kwargs.get('delivered_at'),
+                                 proof_of_delivery=kwargs.get('proof_of_delivery'),
+                                 delivery_notes=kwargs.get('delivery_notes'),
+                                 shipped_date=kwargs.get('shipped_date'),
+                                 estimated_delivery_date=kwargs.get('estimated_delivery_date'))
+        
+        thread = Thread(target=send_async_email, args=(app, msg))
+        thread.daemon = True
+        thread.start()
+        logger.info(f"Order status email thread started for Order #{order_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to start order status email thread: {str(e)}")
+        return False
+
+def send_inventory_alert(product_name, current_stock):
+    """Notify admin when stock is low (<= 5)"""
+    try:
+        with app.app_context():
+            admin_email = app.config.get('MAIL_DEFAULT_SENDER')
+            if not admin_email:
+                logger.warning("No admin email configured for inventory alerts")
+                return
+
+            msg = Message(
+                f'⚠️ Low Stock Alert: {product_name}',
+                recipients=[admin_email]
+            )
+            msg.body = f"""
+Low Stock Alert for BuyMo
+
+Product: {product_name}
+Current Stock: {current_stock}
+
+Please restock this item soon!
+"""
+            mail.send(msg)
+            logger.info(f"Inventory alert sent for {product_name}")
+    except Exception as e:
+        logger.error(f"Failed to send inventory alert: {str(e)}")
+
 @app.context_processor
 def inject_cart_count():
     """Make cart count available to all templates with caching"""
@@ -282,7 +334,7 @@ def inject_cart_count():
                 cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
                 cart_count = cur.fetchone()[0]
                 cur.close()
-                database.return_db_connection(conn)
+                conn.close()
                 # Cache for this session
                 session[cache_key] = cart_count
             except Exception as e:
@@ -300,15 +352,35 @@ def index():
         conn = database.get_db_connection()
         cur = conn.cursor()
         
-        # 1. Get featured products + categories in one query
+        # Get wishlist ids if logged in
+        wishlist_ids = []
+        if current_user.is_authenticated:
+            cur.execute('SELECT product_id FROM wishlist WHERE user_id = %s', (current_user.id,))
+            wishlist_ids = [row[0] for row in cur.fetchall()]
+
+        # 1. Get featured products + ratings in one query
         cur.execute('''
-            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
+                   COALESCE(r.avg_rating, 0), COALESCE(r.review_count, 0)
             FROM products p
             JOIN categories c ON p.category_id = c.id
+            LEFT JOIN (
+                SELECT product_id, AVG(rating) as avg_rating, COUNT(*) as review_count
+                FROM reviews
+                GROUP BY product_id
+            ) r ON p.id = r.product_id
             ORDER BY p.id DESC
             LIMIT 8
         ''')
-        featured_products = cur.fetchall()
+        raw_featured = cur.fetchall()
+        
+        featured_products = []
+        avg_ratings = {}
+        review_counts = {}
+        for p in raw_featured:
+            featured_products.append(p[:7])
+            avg_ratings[p[0]] = round(float(p[7]), 1)
+            review_counts[p[0]] = p[8]
         
         # 2. Get all categories
         cur.execute('SELECT * FROM categories ORDER BY name')
@@ -325,18 +397,20 @@ def index():
         total_products, total_orders, total_customers = stats if stats else (0, 0, 0)
         
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
         
         return render_template('landing.html', 
                              featured_products=featured_products,
                              categories=categories,
                              total_products=total_products,
                              total_orders=total_orders,
-                             total_customers=total_customers)
+                             total_customers=total_customers,
+                             avg_ratings=avg_ratings,
+                             review_counts=review_counts,
+                             wishlist_ids=wishlist_ids)
     except Exception as e:
         logger.error(f"Critical error in landing page: {str(e)}")
-        if 'conn' in locals() and conn:
-            database.return_db_connection(conn)
+        # Fallback: redirect to signup if landing page fails
         return redirect(url_for('signup'))
 
 @app.route('/get-started')
@@ -454,10 +528,16 @@ def home():
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', "").strip()
 
-    # Base query with ratings integrated via JOIN to avoid huge N+1 loops
+    # Get wishlist ids for current user
+    wishlist_ids = []
+    if current_user.is_authenticated:
+        cur.execute('SELECT product_id FROM wishlist WHERE user_id = %s', (current_user.id,))
+        wishlist_ids = [row[0] for row in cur.fetchall()]
+
+    # Base query with ratings integrated via JOIN for better performance
     query = '''
         SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
-               COALESCE(r.avg_rating, 0), COALESCE(r.review_count, 0)
+               COALESCE(r.avg_rating, 0) as avg_rating, COALESCE(r.review_count, 0) as review_count
         FROM products p
         JOIN categories c ON p.category_id = c.id
         LEFT JOIN (
@@ -467,16 +547,19 @@ def home():
         ) r ON p.id = r.product_id
         WHERE 1=1
     '''
-    params = []
+    
+    # Check for is_active column dynamically to avoid crashes
+    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='products' AND column_name='is_active'")
+    if cur.fetchone():
+        query += " AND COALESCE(p.is_active, true) = true"
 
+    params = []
     if search_query:
         query += " AND p.name ILIKE %s"
         params.append(f"%{search_query}%")
-
     if category_filter:
         query += " AND c.name = %s"
         params.append(category_filter)
-
     if min_price:
         query += " AND p.price >= %s"
         params.append(float(min_price))
@@ -485,28 +568,27 @@ def home():
         params.append(float(max_price))
 
     cur.execute(query, params)
-    products_data = cur.fetchall()
+    raw_products = cur.fetchall()
     
     products = []
     avg_ratings = {}
     review_counts = {}
-    
-    for p in products_data:
-        # Reconstruct format for your existing template
+    for p in raw_products:
         products.append(p[:7])
         avg_ratings[p[0]] = round(float(p[7]), 1)
         review_counts[p[0]] = p[8]
 
-    cur.execute('SELECT * FROM categories;')
+    cur.execute('SELECT * FROM categories ORDER BY name;')
     categories = cur.fetchall()
 
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
 
     return render_template('home.html', products=products, categories=categories, 
                          search_query=search_query, category_filter=category_filter, 
                          min_price=min_price, max_price=max_price, 
-                         avg_ratings=avg_ratings, review_counts=review_counts)
+                         avg_ratings=avg_ratings, review_counts=review_counts,
+                         wishlist_ids=wishlist_ids)
 
 @app.route('/product/<int:product_id>')
 def product(product_id):
@@ -546,7 +628,7 @@ def product(product_id):
         related_products = cur.fetchall()
     
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
     
     if product:
         return render_template('product.html',
@@ -585,7 +667,7 @@ def submit_review(product_id):
         flash('An error occurred while submitting the review.', 'error')
     finally:
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
 
     return redirect(url_for('product', product_id=product_id))
 
@@ -601,7 +683,7 @@ def add_product():
     cur.execute('SELECT * FROM categories;')
     categories = cur.fetchall()
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
 
     if request.method == 'POST':
         name = request.form.get('name')
@@ -671,7 +753,7 @@ def add_product():
             conn.rollback()
         finally:
             cur.close()
-            database.return_db_connection(conn)
+            conn.close()
 
     return render_template('add_product.html', categories=categories)
 
@@ -715,7 +797,7 @@ def add_to_cart(product_id):
         flash('An error occurred while adding the product to the cart.', 'error')
     finally:
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
 
     return redirect(url_for('cart'))
 
@@ -729,7 +811,7 @@ def api_cart_count():
         cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
         count = cur.fetchone()[0]
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
         return jsonify({'count': count})
     except Exception as e:
         logger.error(f"Error fetching cart count: {str(e)}")
@@ -752,7 +834,7 @@ def cart():
     total_price = sum(item[3] * item[5] for item in cart_items) if cart_items else 0
     
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
     
     return render_template('cart.html', 
                          cart_items=cart_items, 
@@ -777,7 +859,7 @@ def checkout():
         if not cart_items:
             flash('Your cart is empty.', 'warning')
             cur.close()
-            database.return_db_connection(conn)
+            conn.close()
             return redirect(url_for('cart'))
         
         subtotal = float(sum(item[3] * item[5] for item in cart_items))
@@ -811,7 +893,7 @@ def checkout():
             last_order = None
         
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
         
         from datetime import date
         return render_template('checkout.html', 
@@ -826,7 +908,7 @@ def checkout():
         session['user_id'] = current_user.id
 
         cur.execute('''
-            SELECT p.id, c.quantity, p.remaining_quantity, p.price
+            SELECT p.id, c.quantity, p.remaining_quantity, p.price, p.name
             FROM cart_items c
             JOIN products p ON c.product_id = p.id
             WHERE c.user_id = %s
@@ -839,7 +921,7 @@ def checkout():
 
         for item in cart_items:
             if item[2] < item[1]:
-                flash(f'Not enough stock for product ID {item[0]}', 'error')
+                flash(f'Not enough stock for {item[4]}', 'error')
                 return redirect(url_for('cart'))
 
         subtotal = float(sum(item[3] * item[1] for item in cart_items))
@@ -931,7 +1013,7 @@ def checkout():
         return redirect(url_for('cart'))
     finally:
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
 
 @app.route('/payfast/return', methods=['GET'])
 def payfast_return():
@@ -1050,6 +1132,14 @@ def payfast_notify():
             ''', (pending_order_id,))
 
             conn.commit()
+            
+            # Check for low stock after transaction is committed
+            for item in cart_items:
+                cur.execute('SELECT name, remaining_quantity FROM products WHERE id = %s', (item['product_id'],))
+                prod_data = cur.fetchone()
+                if prod_data and prod_data[1] <= 5:
+                    send_inventory_alert(prod_data[0], prod_data[1])
+                    
             logger.info("Order completed successfully")
 
             # Send confirmation email
@@ -1073,7 +1163,7 @@ def payfast_notify():
             logger.error(f"Error processing ITN: {str(e)}")
             return "Error", 500
         finally:
-            database.return_db_connection(conn)
+            conn.close()
 
     return "OK", 200
 
@@ -1105,7 +1195,7 @@ def remove_from_cart(item_id):
         conn.rollback()
         flash(f'Error removing item: {str(e)}', 'error')
     finally:
-        database.return_db_connection(conn)
+        conn.close()
     
     return redirect(url_for('cart'))
 
@@ -1140,7 +1230,7 @@ def update_cart(item_id):
         flash(f'Error updating cart: {str(e)}', 'error')
     finally:
         if conn:
-            database.return_db_connection(conn)
+            conn.close()
     
     return redirect(url_for('cart'))
 
@@ -1219,7 +1309,7 @@ def edit_product(product_id):
         return redirect(url_for('edit_product', product_id=product_id))
     
     finally:
-        database.return_db_connection(conn)
+        conn.close()
 
 @app.route('/delete-product/<int:product_id>', methods=['POST'])
 @login_required
@@ -1260,7 +1350,7 @@ def delete_product(product_id):
         logger.error(f'Error deleting product: {str(e)}')
         flash(f'Error: {str(e)}', 'error')
     finally:
-        database.return_db_connection(conn)
+        conn.close()
     
     return redirect(url_for('admin_products'))
 
@@ -1335,7 +1425,7 @@ def profile():
         ''', (current_user.id,))
         orders = cur.fetchall()
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
     except Exception as e:
         logger.error(f"Error fetching user orders: {e}")
 
@@ -1389,7 +1479,7 @@ def change_password():
         flash(f"Error updating password: {str(e)}", "error")
     finally:
         if conn:
-            database.return_db_connection(conn)
+            conn.close()
             
     return redirect(url_for('profile'))
 
@@ -1414,7 +1504,7 @@ def load_user(user_id):
     cur.execute('SELECT * FROM users WHERE id = %s;', (user_id,))
     user_data = cur.fetchone()
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
     if user_data:
         return User(id=user_data[0],
                   username=user_data[1],
@@ -1425,126 +1515,78 @@ def load_user(user_id):
 @app.route('/orders')
 @login_required
 def orders():
-    # Get a fresh connection to avoid schema cache issues
-    conn = database.get_db_connection()
-    conn.set_session(autocommit=True)  # Force new transaction
-    cur = conn.cursor()
-
-    # Fetch completed orders with delivery info and status
-    search_query = request.args.get('search', '').strip()
-    
     try:
-        if search_query:
-            cur.execute('''
-                SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
-                       o.full_name, o.phone, o.street_address, o.suburb, o.city, 
-                       o.province, o.postal_code, o.delivery_fee, o.pickup_date, o.tracking_number
-                FROM orders o
-                WHERE o.user_id = %s AND (o.tracking_number ILIKE %s OR CAST(o.id AS TEXT) ILIKE %s)
-                ORDER BY o.order_date DESC;
-            ''', (current_user.id, f'%{search_query}%', f'%{search_query}%'))
-        else:
-            cur.execute('''
-                SELECT o.id, o.total_amount, o.order_date, o.status, o.delivery_method,
-                       o.full_name, o.phone, o.street_address, o.suburb, o.city, 
-                       o.province, o.postal_code, o.delivery_fee, o.pickup_date, o.tracking_number
-                FROM orders o
-                WHERE o.user_id = %s
-                ORDER BY o.order_date DESC;
-            ''', (current_user.id,))
-        completed_orders = cur.fetchall()
-    except Exception as e:
-        # If columns don't exist yet, rollback and try basic query
-        logger.error(f"Error fetching orders: {str(e)}")
-        conn.rollback()  # IMPORTANT: Rollback the failed transaction
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        # 1. Fetch orders with all details
         cur.execute('''
-            SELECT o.id, o.total_amount, o.order_date
-            FROM orders o
-            WHERE o.user_id = %s
-            ORDER BY o.order_date DESC;
+            SELECT id, total_amount, status, order_date, tracking_number,
+                   delivery_method, full_name, phone, street_address, suburb,
+                   city, province, postal_code, delivery_fee, pickup_date,
+                   driver_name, driver_phone, tracking_link, shipped_date,
+                   estimated_delivery_date, delivered_at, proof_of_delivery, delivery_notes
+            FROM orders 
+            WHERE user_id = %s 
+            ORDER BY order_date DESC
         ''', (current_user.id,))
-        basic_orders = cur.fetchall()
-        # Return basic order view with default values
-        order_history = []
-        for order in basic_orders:
-            order_id = order[0]
+        orders_data = cur.fetchall()
+        
+        # 2. Optimized: Fetch ALL items for ALL orders in one go (No N+1)
+        order_ids = [o[0] for o in orders_data]
+        all_items = {}
+        if order_ids:
             cur.execute('''
-                SELECT p.name, p.image, oi.quantity, oi.price_at_purchase
+                SELECT oi.order_id, p.name, p.image, oi.quantity, oi.price_at_purchase
                 FROM order_items oi
                 JOIN products p ON oi.product_id = p.id
-                WHERE oi.order_id = %s;
-            ''', (order_id,))
-            order_items = cur.fetchall()
+                WHERE oi.order_id = ANY(%s);
+            ''', (order_ids,))
+            items_data = cur.fetchall()
+            for item in items_data:
+                oid = item[0]
+                if oid not in all_items:
+                    all_items[oid] = []
+                all_items[oid].append({
+                    'name': item[1], 
+                    'image': item[2], 
+                    'quantity': item[3], 
+                    'price_at_purchase': float(item[4])
+                })
+
+        # 3. Build history objects
+        order_history = []
+        for order in orders_data:
+            order_id = order[0]
             order_history.append({
                 'id': order_id,
                 'total_amount': float(order[1]),
-                'order_date': order[2],
-                'status': 'processing',
-                'delivery_method': 'delivery',
-                'full_name': 'N/A',
-                'phone': 'N/A',
-                'street_address': 'Address not available',
-                'suburb': '',
-                'city': '',
-                'province': '',
-                'postal_code': '',
-                'delivery_fee': 0,
-                'pickup_date': None,
-                'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
+                'status': order[2],
+                'date': order[3].strftime('%Y-%m-%d %H:%M'),
+                'tracking_number': order[4],
+                'delivery_method': order[5],
+                'full_name': order[6],
+                'phone': order[7],
+                'address': f"{order[8]}, {order[9]}, {order[10]}, {order[11]} {order[12]}".strip(', '),
+                'delivery_fee': float(order[13]) if order[13] else 0,
+                'pickup_date': order[14],
+                'driver_name': order[15],
+                'driver_phone': order[16],
+                'tracking_link': order[17],
+                'shipped_date': order[18],
+                'estimated_delivery_date': order[19],
+                'delivered_at': order[20],
+                'proof_of_delivery': order[21],
+                'delivery_notes': order[22],
+                'order_items': all_items.get(order_id, [])
             })
+
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
         return render_template('orders.html', orders=order_history)
-
-    order_history = []
-    # Optimized: Fetch ALL items for ALL orders in one go (No N+1)
-    order_ids = [o[0] for o in completed_orders]
-    all_items = {}
-    if order_ids:
-        cur.execute('''
-            SELECT oi.order_id, p.name, p.image, oi.quantity, oi.price_at_purchase
-            FROM order_items oi
-            JOIN products p ON oi.product_id = p.id
-            WHERE oi.order_id = ANY(%s);
-        ''', (order_ids,))
-        items_data = cur.fetchall()
-        for item in items_data:
-            oid = item[0]
-            if oid not in all_items:
-                all_items[oid] = []
-            all_items[oid].append({
-                'name': item[1], 
-                'image': item[2], 
-                'quantity': item[3], 
-                'price_at_purchase': float(item[4])
-            })
-
-    order_history = []
-    for order in completed_orders:
-        order_id = order[0]
-        order_history.append({
-            'id': order_id,
-            'total_amount': float(order[1]),
-            'order_date': order[2],
-            'status': order[3] or 'processing',
-            'delivery_method': order[4] or 'delivery',
-            'full_name': order[5],
-            'phone': order[6],
-            'street_address': order[7],
-            'suburb': order[8],
-            'city': order[9],
-            'province': order[10],
-            'postal_code': order[11],
-            'delivery_fee': float(order[12]) if order[12] else 0,
-            'pickup_date': order[13],
-            'tracking_number': order[14],
-            'order_items': all_items.get(order_id, [])
-        })
-
-    cur.close()
-    database.return_db_connection(conn)
-
-    return render_template('orders.html', orders=order_history)
+    except Exception as e:
+        logger.error(f"Error fetching order history: {e}")
+        return render_template('orders.html', orders=[])
 
 @app.route('/admin/products')
 @login_required
@@ -1581,7 +1623,7 @@ def admin_products():
         })
     
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
     
     return render_template('admin_products.html', products=products_list)
 
@@ -1609,7 +1651,7 @@ def admin_abandoned_carts():
     abandoned_carts = cur.fetchall()
     
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
     
     return render_template('admin_abandoned_carts.html', carts=abandoned_carts)
 
@@ -1648,7 +1690,7 @@ def send_cart_reminders():
             sent_count += 1
             
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
     
     flash(f'Successfully sent {sent_count} reminder emails!', 'success')
     return redirect(url_for('admin_abandoned_carts'))
@@ -1689,7 +1731,7 @@ def admin_orders():
         })
     
     cur.close()
-    database.return_db_connection(conn)
+    conn.close()
     
     return render_template('admin_orders.html', orders=orders_list)
 
@@ -1710,11 +1752,52 @@ def admin_update_order_status(order_id):
     cur = conn.cursor()
     
     try:
-        cur.execute('''
-            UPDATE orders 
-            SET status = %s, status_updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-        ''', (new_status, order_id))
+        cur.execute('SELECT email, username FROM users WHERE id = (SELECT user_id FROM orders WHERE id = %s)', (order_id,))
+        user_info = cur.fetchone()
+        
+        driver_name = request.form.get('driver_name')
+        driver_phone = request.form.get('driver_phone')
+        tracking_link = request.form.get('tracking_link')
+        shipped_date = request.form.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
+        estimated_delivery_date = request.form.get('estimated_delivery_date')
+        
+        if new_status == 'shipped':
+            cur.execute('''
+                UPDATE orders 
+                SET status = %s, 
+                    status_updated_at = CURRENT_TIMESTAMP,
+                    driver_name = %s,
+                    driver_phone = %s,
+                    tracking_link = %s,
+                    shipped_date = %s,
+                    estimated_delivery_date = %s
+                WHERE id = %s
+            ''', (new_status, driver_name, driver_phone, tracking_link, shipped_date, estimated_delivery_date, order_id))
+            
+        elif new_status == 'delivered':
+            # Get delivery confirmation details
+            delivered_at = request.form.get('delivered_at', datetime.now().strftime('%Y-%m-%d %H:%M'))
+            proof_of_delivery = request.form.get('proof_of_delivery', '').strip()  # URL from upload
+            delivery_notes = request.form.get('delivery_notes', '').strip()
+            
+            cur.execute('''
+                UPDATE orders 
+                SET status = %s, 
+                    status_updated_at = CURRENT_TIMESTAMP,
+                    delivered_at = %s,
+                    proof_of_delivery = %s,
+                    delivery_notes = %s
+                WHERE id = %s
+            ''', (new_status, delivered_at, proof_of_delivery, delivery_notes, order_id))
+            
+        else:
+            # Simple status update
+            cur.execute('''
+                UPDATE orders 
+                SET status = %s, status_updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (new_status, order_id))
+            
         conn.commit()
         flash(f'Order #{order_id} status updated to {new_status.title()}!', 'success')
     except Exception as e:
@@ -1723,7 +1806,7 @@ def admin_update_order_status(order_id):
         flash('Error updating order status.', 'error')
     finally:
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
     
     return redirect(url_for('admin_orders'))
 
@@ -1795,7 +1878,7 @@ def admin_order_details(order_id):
         return jsonify({'error': 'Failed to fetch order details'}), 500
     finally:
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
 
 @app.route('/admin/migrate-database', methods=['GET', 'POST'])
 @login_required
@@ -1858,7 +1941,15 @@ def migrate_database():
                 ("delivery_fee", "DECIMAL(10, 2) DEFAULT 50.00"),
                 ("status", "VARCHAR(50) DEFAULT 'processing'"),
                 ("status_updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-                ("pickup_date", "DATE")
+                ("pickup_date", "DATE"),
+                ("driver_name", "VARCHAR(100)"),
+                ("driver_phone", "VARCHAR(20)"),
+                ("tracking_link", "TEXT"),
+                ("shipped_date", "VARCHAR(50)"),
+                ("estimated_delivery_date", "VARCHAR(50)"),
+                ("delivered_at", "VARCHAR(50)"),
+                ("proof_of_delivery", "TEXT"),
+                ("delivery_notes", "TEXT")
             ]
             for col_name, col_type in columns_to_add:
                 try:
@@ -1888,7 +1979,7 @@ def migrate_database():
             return render_template('admin_migrate.html', results=[f"Error: {str(e)}"], migrated=False)
         finally:
             cur.close()
-            database.return_db_connection(conn)
+            conn.close()
     
     return render_template('admin_migrate.html', results=None, migrated=False)
 
@@ -1926,9 +2017,145 @@ def cleanup_test_users():
         flash(f'Cleanup failed: {str(e)}', 'error')
     finally:
         cur.close()
-        database.return_db_connection(conn)
+        conn.close()
         
     return redirect(url_for('home'))
+
+@app.route('/admin/dashboard')
+@login_required
+def admin_dashboard():
+    if not current_user.is_admin:
+        return redirect(url_for('home'))
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    
+    # Simple stats for dashboard
+    cur.execute('SELECT COUNT(*) FROM orders')
+    total_orders = cur.fetchone()[0]
+    
+    cur.execute('SELECT SUM(total_amount) FROM orders WHERE status != %s', ('cancelled',))
+    total_revenue = cur.fetchone()[0] or 0
+    
+    cur.execute('SELECT COUNT(*) FROM users')
+    total_users = cur.fetchone()[0]
+    
+    cur.execute('SELECT id, total_amount, status, order_date FROM orders ORDER BY order_date DESC LIMIT 5')
+    recent_orders = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('admin_dashboard.html', 
+                         total_orders=total_orders, 
+                         total_revenue=total_revenue, 
+                         total_users=total_users,
+                         recent_orders=recent_orders)
+
+@app.route('/wishlist')
+@login_required
+def wishlist():
+    items = database.get_user_wishlist(current_user.id)
+    return render_template('wishlist.html', items=items)
+
+@app.route('/wishlist/toggle/<int:product_id>', methods=['POST'])
+@login_required
+def toggle_wishlist(product_id):
+    success, added, message = database.toggle_wishlist_item(current_user.id, product_id)
+    if success:
+        return jsonify({'status': 'success', 'added': added, 'message': message})
+    return jsonify({'status': 'error', 'message': message}), 500
+
+@app.route('/apply-coupon', methods=['POST'])
+@login_required
+def apply_coupon():
+    data = request.get_json()
+    code = data.get('code', '').strip().upper()
+    subtotal = float(data.get('subtotal', 0))
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute('''
+            SELECT id, discount_type, discount_value, min_purchase, usage_limit, usage_count, valid_until 
+            FROM coupons 
+            WHERE code = %s AND is_active = TRUE
+        ''', (code,))
+        coupon = cur.fetchone()
+        
+        if not coupon:
+            return jsonify({'success': False, 'message': 'Invalid or inactive coupon code.'})
+            
+        # Validations
+        if subtotal < float(coupon[3]):
+            return jsonify({'success': False, 'message': f'Minimum purchase of {format_zar(coupon[3])} required.'})
+            
+        if coupon[4] and coupon[5] >= coupon[4]:
+            return jsonify({'success': False, 'message': 'Coupon usage limit reached.'})
+            
+        if coupon[6] and coupon[6] < datetime.now():
+            return jsonify({'success': False, 'message': 'Coupon has expired.'})
+            
+        discount_amount = 0
+        if coupon[1] == 'percentage':
+            discount_amount = subtotal * (float(coupon[2]) / 100)
+        else:
+            discount_amount = float(coupon[2])
+            
+        return jsonify({
+            'success': True, 
+            'message': 'Coupon applied!', 
+            'discount_amount': round(discount_amount, 2),
+            'code': code
+        })
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/admin/coupons')
+@login_required
+def admin_coupons():
+    if not current_user.is_admin:
+        return redirect(url_for('home'))
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT id, code, discount_type, discount_value, min_purchase, usage_limit, usage_count, valid_until, is_active FROM coupons ORDER BY id DESC')
+    coupons = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('admin_coupons.html', coupons=coupons)
+
+@app.route('/admin/coupons/add', methods=['POST'])
+@login_required
+def add_coupon():
+    if not current_user.is_admin:
+        return abort(403)
+        
+    code = request.form.get('code', '').strip().upper()
+    discount_type = request.form.get('discount_type')
+    discount_value = float(request.form.get('discount_value', 0))
+    min_purchase = float(request.form.get('min_purchase', 0))
+    usage_limit = request.form.get('usage_limit')
+    valid_until = request.form.get('valid_until')
+    
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute('''
+            INSERT INTO coupons (code, discount_type, discount_value, min_purchase, usage_limit, valid_until)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (code, discount_type, discount_value, min_purchase, 
+              int(usage_limit) if usage_limit else None, 
+              valid_until if valid_until else None))
+        conn.commit()
+        flash('Coupon added successfully!', 'success')
+    except Exception as e:
+        flash('Error adding coupon.', 'error')
+    finally:
+        cur.close()
+        conn.close()
+    return redirect(url_for('admin_coupons'))
 
 @app.route('/admin/test-email')
 @login_required
