@@ -254,6 +254,16 @@ def create_tables():
         );
     ''')
     
+    # Migration: Ensure wishlist has added_at column
+    cur.execute('''
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wishlist' AND column_name='added_at') THEN
+                ALTER TABLE wishlist ADD COLUMN added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+            END IF;
+        END $$;
+    ''')
+    
     # Create indexes for better performance
     cur.execute('''
         CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
