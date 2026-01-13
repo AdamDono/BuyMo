@@ -1,25 +1,62 @@
 import psycopg2
+from psycopg2 import pool
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+from urllib.parse import urlparse
+
+# Global connection pool
+_db_pool = None
+
+def init_pool():
+    global _db_pool
+    if _db_pool is None:
+        db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
+        
+        # Ensure we use postgresql:// for psycopg2
+        if db_url.startswith('postgres://'):
+            db_url = db_url.replace('postgres://', 'postgresql://', 1)
+        
+        # Crucial for Render/Aiven/Neon cloud databases: enforce SSL
+        if 'localhost' not in db_url and '127.0.0.1' not in db_url:
+            if 'sslmode' not in db_url:
+                separator = '&' if '?' in db_url else '?'
+                db_url += f"{separator}sslmode=require"
+        
+        try:
+            _db_pool = pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=20, # Higher for concurrency
+                dsn=db_url
+            )
+            print("Database connection pool initialized successfully.")
+        except Exception as e:
+            print(f"Error initializing connection pool: {e}")
+            # Fallback will be direct connection in get_db_connection
 
 def get_db_connection():
-    db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
-    if db_url.startswith('postgres://'):
-        db_url = db_url.replace('postgres://', 'postgresql://', 1)
-    from urllib.parse import urlparse
-    url = urlparse(db_url)
-    conn = psycopg2.connect(
-        dbname=url.path[1:],
-        user=url.username,
-        password=url.password,
-        host=url.hostname,
-        port=url.port or 5432
-    )
-    return conn
+    global _db_pool
+    if _db_pool is None:
+        init_pool()
+        
+    if _db_pool:
+        try:
+            return _db_pool.getconn()
+        except Exception as e:
+            print(f"Error getting connection from pool: {e}")
+    
+    # Absolute fallback to direct connection
+    db_url = os.getenv('DATABASE_URL')
+    return psycopg2.connect(db_url)
 
 def return_db_connection(conn):
-    """Legacy compatibility - just close the connection"""
-    if conn:
+    global _db_pool
+    if _db_pool and conn:
+        try:
+            _db_pool.putconn(conn)
+        except Exception as e:
+            print(f"Error returning connection to pool: {e}")
+            conn.close()
+    elif conn:
         conn.close()
 
 def create_user(username, email, password):

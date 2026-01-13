@@ -334,7 +334,7 @@ def inject_cart_count():
                 cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
                 cart_count = cur.fetchone()[0]
                 cur.close()
-                conn.close()
+                database.return_db_connection(conn)
                 # Cache for this session
                 session[cache_key] = cart_count
             except Exception as e:
@@ -397,7 +397,7 @@ def index():
         total_products, total_orders, total_customers = stats if stats else (0, 0, 0)
         
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         
         return render_template('landing.html', 
                              featured_products=featured_products,
@@ -667,7 +667,7 @@ def submit_review(product_id):
         flash('An error occurred while submitting the review.', 'error')
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
 
     return redirect(url_for('product', product_id=product_id))
 
@@ -753,7 +753,7 @@ def add_product():
             conn.rollback()
         finally:
             cur.close()
-            conn.close()
+            database.return_db_connection(conn)
 
     return render_template('add_product.html', categories=categories)
 
@@ -797,7 +797,7 @@ def add_to_cart(product_id):
         flash('An error occurred while adding the product to the cart.', 'error')
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
 
     return redirect(url_for('cart'))
 
@@ -811,7 +811,7 @@ def api_cart_count():
         cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
         count = cur.fetchone()[0]
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         return jsonify({'count': count})
     except Exception as e:
         logger.error(f"Error fetching cart count: {str(e)}")
@@ -859,7 +859,7 @@ def checkout():
         if not cart_items:
             flash('Your cart is empty.', 'warning')
             cur.close()
-            conn.close()
+            database.return_db_connection(conn)
             return redirect(url_for('cart'))
         
         subtotal = float(sum(item[3] * item[5] for item in cart_items))
@@ -893,7 +893,7 @@ def checkout():
             last_order = None
         
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         
         from datetime import date
         return render_template('checkout.html', 
@@ -1013,7 +1013,7 @@ def checkout():
         return redirect(url_for('cart'))
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
 
 @app.route('/payfast/return', methods=['GET'])
 def payfast_return():
@@ -1163,7 +1163,7 @@ def payfast_notify():
             logger.error(f"Error processing ITN: {str(e)}")
             return "Error", 500
         finally:
-            conn.close()
+            database.return_db_connection(conn)
 
     return "OK", 200
 
@@ -1195,7 +1195,7 @@ def remove_from_cart(item_id):
         conn.rollback()
         flash(f'Error removing item: {str(e)}', 'error')
     finally:
-        conn.close()
+        database.return_db_connection(conn)
     
     return redirect(url_for('cart'))
 
@@ -1230,7 +1230,7 @@ def update_cart(item_id):
         flash(f'Error updating cart: {str(e)}', 'error')
     finally:
         if conn:
-            conn.close()
+            database.return_db_connection(conn)
     
     return redirect(url_for('cart'))
 
@@ -1258,6 +1258,7 @@ def edit_product(product_id):
             price = float(request.form['price'])
             description = request.form['description']
             category_id = int(request.form['category'])
+            remaining_quantity = int(request.form.get('remaining_quantity', product[6]))
             image_url = product[4]  # Keep existing image
             image = request.files.get('image')
 
@@ -1291,9 +1292,9 @@ def edit_product(product_id):
 
             cur.execute('''
                 UPDATE products 
-                SET name = %s, price = %s, description = %s, image = %s, category_id = %s
+                SET name = %s, price = %s, description = %s, image = %s, category_id = %s, remaining_quantity = %s
                 WHERE id = %s
-            ''', (name, price, description, image_url, category_id, product_id))
+            ''', (name, price, description, image_url, category_id, remaining_quantity, product_id))
             
             conn.commit()
             flash('Product updated successfully!', 'success')
@@ -1309,7 +1310,7 @@ def edit_product(product_id):
         return redirect(url_for('edit_product', product_id=product_id))
     
     finally:
-        conn.close()
+        database.return_db_connection(conn)
 
 @app.route('/delete-product/<int:product_id>', methods=['POST'])
 @login_required
@@ -1350,7 +1351,7 @@ def delete_product(product_id):
         logger.error(f'Error deleting product: {str(e)}')
         flash(f'Error: {str(e)}', 'error')
     finally:
-        conn.close()
+        database.return_db_connection(conn)
     
     return redirect(url_for('admin_products'))
 
@@ -1425,7 +1426,7 @@ def profile():
         ''', (current_user.id,))
         orders = cur.fetchall()
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
     except Exception as e:
         logger.error(f"Error fetching user orders: {e}")
 
@@ -1479,7 +1480,7 @@ def change_password():
         flash(f"Error updating password: {str(e)}", "error")
     finally:
         if conn:
-            conn.close()
+            database.return_db_connection(conn)
             
     return redirect(url_for('profile'))
 
@@ -1582,7 +1583,7 @@ def orders():
             })
 
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         return render_template('orders.html', orders=order_history)
     except Exception as e:
         logger.error(f"Error fetching order history: {e}")
@@ -1806,7 +1807,7 @@ def admin_update_order_status(order_id):
         flash('Error updating order status.', 'error')
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
     
     return redirect(url_for('admin_orders'))
 
@@ -1878,7 +1879,7 @@ def admin_order_details(order_id):
         return jsonify({'error': 'Failed to fetch order details'}), 500
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
 
 @app.route('/admin/migrate-database', methods=['GET', 'POST'])
 @login_required
@@ -1979,7 +1980,7 @@ def migrate_database():
             return render_template('admin_migrate.html', results=[f"Error: {str(e)}"], migrated=False)
         finally:
             cur.close()
-            conn.close()
+            database.return_db_connection(conn)
     
     return render_template('admin_migrate.html', results=None, migrated=False)
 
@@ -2017,7 +2018,7 @@ def cleanup_test_users():
         flash(f'Cleanup failed: {str(e)}', 'error')
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         
     return redirect(url_for('home'))
 
@@ -2110,7 +2111,7 @@ def apply_coupon():
         })
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
 
 @app.route('/admin/coupons')
 @login_required
@@ -2154,7 +2155,7 @@ def add_coupon():
         flash('Error adding coupon.', 'error')
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
     return redirect(url_for('admin_coupons'))
 
 @app.route('/admin/test-email')
