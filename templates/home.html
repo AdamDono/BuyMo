@@ -73,7 +73,15 @@
                             {% endif %}
                             {% endif %}
 
+                            <!-- Wishlist Heart (Top Right) -->
+                            <button class="wishlist-btn" onclick="toggleWishlist(this, {{ product[0] }})"
+                                style="position: absolute; top: 10px; right: 10px; background: white; border: none; border-radius: 50%; width: 35px; height: 35px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2;">
+                                <i class="{{ 'fas' if current_user.is_authenticated and product[0] in wishlist_ids else 'far' }} fa-heart"
+                                    style="color: #ef4444; font-size: 1.2rem; transition: transform 0.2s;"></i>
+                            </button>
+
                             <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" loading="lazy">
+                            {% if product[6] > 0 %}
                             <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}"
                                 class="quick-add-form">
                                 <input type="hidden" name="quantity" value="1" />
@@ -81,6 +89,7 @@
                                     <i class="fas fa-cart-plus"></i>
                                 </button>
                             </form>
+                            {% endif %}
                 </div>
                 <div class="product-info">
                     <h3>{{ product[1] }}</h3>
@@ -125,116 +134,7 @@
 
 {% block extra_js %}
 <script>
-    // Quick add to cart with flying animation
     document.addEventListener('DOMContentLoaded', function () {
-        const quickAddForms = document.querySelectorAll('.quick-add-form');
-
-        quickAddForms.forEach(form => {
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-
-                const button = this.querySelector('.quick-add');
-                const productCard = this.closest('.product-card');
-                const productImage = productCard.querySelector('img');
-
-                // Create flying image
-                const flyingImg = document.createElement('img');
-                flyingImg.src = productImage.src;
-                flyingImg.className = 'cart-item-flying';
-
-                // Position at product image
-                const rect = productImage.getBoundingClientRect();
-                flyingImg.style.position = 'fixed';
-                flyingImg.style.left = rect.left + 'px';
-                flyingImg.style.top = rect.top + 'px';
-                flyingImg.style.width = rect.width + 'px';
-                flyingImg.style.height = rect.height + 'px';
-                flyingImg.style.objectFit = 'contain';
-                flyingImg.style.background = 'white';
-                flyingImg.style.padding = '5px';
-                flyingImg.style.borderRadius = '12px';
-                flyingImg.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
-                flyingImg.style.zIndex = '9999';
-
-                document.body.appendChild(flyingImg);
-
-                // Remove after animation
-                setTimeout(() => {
-                    flyingImg.remove();
-                }, 800);
-
-                // Pulse cart icon
-                const cartLink = document.querySelector('.cart-link');
-                if (cartLink) {
-                    cartLink.classList.add('cart-pulse');
-                    setTimeout(() => {
-                        cartLink.classList.remove('cart-pulse');
-                    }, 300);
-                }
-
-                const formData = new FormData(this);
-
-                fetch(this.action, {
-                    method: 'POST',
-                    body: formData
-                })
-                    .then(response => {
-                        if (response.ok) {
-                            showToast('✓ Added to cart!', 'success');
-
-                            // Fetch updated cart count from server
-                            fetch('/api/cart-count')
-                                .then(res => res.json())
-                                .then(data => {
-                                    const cartLink = document.querySelector('.cart-link');
-                                    if (cartLink) {
-                                        let badge = document.getElementById('cart-badge');
-
-                                        if (data.count > 0) {
-                                            if (badge) {
-                                                // Update existing badge
-                                                badge.textContent = data.count;
-                                                badge.classList.add('cart-badge-update');
-                                                setTimeout(() => {
-                                                    badge.classList.remove('cart-badge-update');
-                                                }, 500);
-                                            } else {
-                                                // Create new badge
-                                                badge = document.createElement('span');
-                                                badge.className = 'cart-badge';
-                                                badge.id = 'cart-badge';
-                                                badge.textContent = data.count;
-                                                cartLink.appendChild(badge);
-                                            }
-                                        } else {
-                                            // If count is 0, remove badge if it exists
-                                            if (badge) {
-                                                badge.remove();
-                                            }
-                                        }
-                                    }
-                                })
-                                .catch(err => console.error('Error fetching cart count:', err));
-
-                            // Button success feedback
-                            const originalHTML = button.innerHTML;
-                            button.innerHTML = '<i class="fas fa-check"></i>';
-                            button.style.background = '#10b981';
-
-                            setTimeout(() => {
-                                button.innerHTML = originalHTML;
-                                button.style.background = '';
-                            }, 1500);
-                        } else {
-                            showToast('Error adding to cart', 'error');
-                        }
-                    })
-                    .catch(error => {
-                        showToast('Error adding to cart', 'error');
-                    });
-            });
-        });
-
         // Delete product confirmation
         const deleteForms = document.querySelectorAll('.delete-form');
         deleteForms.forEach(form => {
