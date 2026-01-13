@@ -1,26 +1,39 @@
 import psycopg2
-from werkzeug.security import generate_password_hash, check_password_hash
 import os
+from werkzeug.security import generate_password_hash, check_password_hash
+from psycopg2 import pool
+from urllib.parse import urlparse
+
+# Global connection pool - initialized on first call
+_db_pool = None
+
+def init_pool():
+    global _db_pool
+    if _db_pool is None:
+        db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
+        if db_url.startswith('postgres://'):
+            db_url = db_url.replace('postgres://', 'postgresql://', 1)
+        
+        # Force sslmode=require for Cloud databases (Render/Aiven) if not present
+        is_cloud_db = any(provider in db_url for provider in ['render.com', 'aivencloud.com'])
+        if is_cloud_db and 'sslmode' not in db_url:
+            if '?' in db_url:
+                db_url += '&sslmode=require'
+            else:
+                db_url += '?sslmode=require'
+        
+        _db_pool = pool.ThreadedConnectionPool(
+            1, 20, dsn=db_url
+        )
 
 def get_db_connection():
-    db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
-    if db_url.startswith('postgres://'):
-        db_url = db_url.replace('postgres://', 'postgresql://', 1)
-    from urllib.parse import urlparse
-    url = urlparse(db_url)
-    conn = psycopg2.connect(
-        dbname=url.path[1:],
-        user=url.username,
-        password=url.password,
-        host=url.hostname,
-        port=url.port or 5432
-    )
-    return conn
+    if _db_pool is None:
+        init_pool()
+    return _db_pool.getconn()
 
 def return_db_connection(conn):
-    """Legacy compatibility - just close the connection"""
-    if conn:
-        conn.close()
+    if _db_pool and conn:
+        _db_pool.putconn(conn)
 
 def create_user(username, email, password):
     conn = get_db_connection()
@@ -101,19 +114,6 @@ def create_tables():
         );
     ''')
     
-    # Add is_active column for product toggle functionality
-    cur.execute('''
-        DO $$ 
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='products' AND column_name='is_active'
-            ) THEN
-                ALTER TABLE products ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
-            END IF;
-        END $$;
-    ''')
-    
     # Reviews table
     cur.execute('''
         CREATE TABLE IF NOT EXISTS reviews (
@@ -188,105 +188,6 @@ def create_tables():
         END $$;
     ''')
     
-    # Add driver and delivery tracking columns if they don't exist
-    cur.execute('''
-        DO $$ 
-        BEGIN
-            -- Driver details for shipped orders
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='driver_name'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN driver_name VARCHAR(100);
-            END IF;
-            
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='driver_phone'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN driver_phone VARCHAR(20);
-            END IF;
-            
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='tracking_link'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN tracking_link TEXT;
-            END IF;
-            
-            -- Delivery confirmation details
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='delivered_at'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN delivered_at TIMESTAMP;
-            END IF;
-            
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='proof_of_delivery'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN proof_of_delivery TEXT;
-            END IF;
-            
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='delivery_notes'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN delivery_notes TEXT;
-            END IF;
-            
-            -- Shipping dates
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='shipped_date'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN shipped_date TIMESTAMP;
-            END IF;
-            
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='estimated_delivery_date'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN estimated_delivery_date DATE;
-            END IF;
-            
-            -- Order discount info
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='discount_amount'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN discount_amount DECIMAL(10, 2) DEFAULT 0.00;
-            END IF;
-
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='orders' AND column_name='coupon_code'
-            ) THEN
-                ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(20);
-            END IF;
-        END $$;
-    ''')
-    
-    # Coupons table
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS coupons (
-            id SERIAL PRIMARY KEY,
-            code VARCHAR(20) UNIQUE NOT NULL,
-            discount_type VARCHAR(10) NOT NULL, -- 'percent' or 'fixed'
-            discount_value DECIMAL(10, 2) NOT NULL,
-            min_purchase DECIMAL(10, 2) DEFAULT 0.00,
-            is_active BOOLEAN DEFAULT TRUE,
-            valid_from TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            valid_until TIMESTAMP,
-            usage_limit INTEGER DEFAULT NULL,
-            usage_count INTEGER DEFAULT 0
-        );
-    ''')
-    
-    # Add index for coupon lookups
-    cur.execute('CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(code);')
-    
     # Order items table for completed order details
     cur.execute('''
         CREATE TABLE IF NOT EXISTS order_items (
@@ -300,24 +201,12 @@ def create_tables():
         );
     ''')
     
-    # Wishlist table
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS wishlist (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, product_id)
-        );
-    ''')
-
     # Create indexes for better performance
     cur.execute('''
         CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
         CREATE INDEX IF NOT EXISTS idx_cart_user ON cart_items(user_id);
         CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
         CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
-        CREATE INDEX IF NOT EXISTS idx_wishlist_user ON wishlist(user_id);
     ''')
 
     conn.commit()
@@ -417,43 +306,6 @@ def clear_user_reset_token(user_id):
     conn.commit()
     cur.close()
     return_db_connection(conn)
-
-def toggle_wishlist_item(user_id, product_id):
-    """Toggle a product in the user's wishlist. Returns True if added, False if removed."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    # Check if exists
-    cur.execute('SELECT id FROM wishlist WHERE user_id = %s AND product_id = %s', (user_id, product_id))
-    exists = cur.fetchone()
-    
-    if exists:
-        cur.execute('DELETE FROM wishlist WHERE id = %s', (exists[0],))
-        added = False
-    else:
-        cur.execute('INSERT INTO wishlist (user_id, product_id) VALUES (%s, %s)', (user_id, product_id))
-        added = True
-        
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-    return added
-
-def get_user_wishlist(user_id):
-    """Get all products in a user's wishlist"""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('''
-        SELECT p.* 
-        FROM products p
-        JOIN wishlist w ON p.id = w.product_id
-        WHERE w.user_id = %s
-        ORDER BY w.created_at DESC
-    ''', (user_id,))
-    products = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    return products
 
 # Call the function to create tables
 create_tables()

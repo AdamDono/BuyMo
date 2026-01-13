@@ -367,31 +367,9 @@
         </div>
         {% endfor %}
 
-        <div class="summary-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 10px;">
-            <div style="width: 100%;">
-                <label
-                    style="font-size: 14px; font-weight: 600; color: #374151; display: block; margin-bottom: 8px;">Promo
-                    Code</label>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" id="coupon-input" class="form-control" placeholder="WELCOME10"
-                        style="flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; text-transform: uppercase;">
-                    <button type="button" id="apply-coupon-btn" class="btn btn-secondary"
-                        style="padding: 10px 15px; border-radius: 8px; font-size: 14px; background: #374151; color: white; border: none; cursor: pointer;">
-                        Apply
-                    </button>
-                </div>
-                <div id="coupon-message" style="font-size: 12px; margin-top: 4px; display: none;"></div>
-                <input type="hidden" name="coupon_code" id="hidden-coupon-code">
-            </div>
-        </div>
-
-        <div class="summary-item" style="margin-top: 20px;">
+        <div class="summary-item">
             <span>Subtotal ({{ cart_items|length }} items)</span>
             <span id="subtotal">{{ subtotal|zar }}</span>
-        </div>
-        <div class="summary-item" id="discount-row" style="display: none; color: #076850; font-weight: 600;">
-            <span>Discount</span>
-            <span id="discount-amount">- R0.00</span>
         </div>
         <div class="summary-item">
             <span>Delivery Fee</span>
@@ -407,11 +385,9 @@
 
 {% block extra_js %}
 <script>
-    const subtotal = Number("{{ subtotal }}");
+    const subtotal = {{ subtotal }};
     const FREE_DELIVERY_THRESHOLD = 1000;
     const DELIVERY_FEE = 50;
-    let currentDiscount = 0;
-    let currentCoupon = '';
 
     // Delivery method toggle
     document.querySelectorAll('.delivery-option').forEach(option => {
@@ -424,121 +400,49 @@
             if (method === 'delivery') {
                 document.getElementById('address-section').style.display = 'block';
                 document.getElementById('pickup-section').style.display = 'none';
-                updateOrderSummary();
+                updateDeliveryFee();
             } else {
                 document.getElementById('address-section').style.display = 'none';
                 document.getElementById('pickup-section').style.display = 'block';
-                updateOrderSummary(0); // 0 delivery fee for pickup
+                document.getElementById('delivery-fee').textContent = 'FREE';
+                document.getElementById('total').textContent = formatZAR(subtotal);
+                document.getElementById('free-delivery-notice').innerHTML = '';
             }
         });
     });
 
-    function updateOrderSummary(forcedFee = null) {
-        const method = document.querySelector('input[name="delivery_method"]:checked').value;
+    function updateDeliveryFee() {
         let fee = 0;
         let noticeHTML = '';
 
-        if (method === 'delivery') {
-            if (subtotal < FREE_DELIVERY_THRESHOLD) {
-                fee = DELIVERY_FEE;
-                const needed = FREE_DELIVERY_THRESHOLD - subtotal;
-                noticeHTML = `<div class="free-delivery-banner">
+        if (subtotal < FREE_DELIVERY_THRESHOLD) {
+            fee = DELIVERY_FEE;
+            const needed = FREE_DELIVERY_THRESHOLD - subtotal;
+            noticeHTML = `<div class="free-delivery-banner">
             🎉 Add ${formatZAR(needed)} more for FREE delivery!
         </div>`;
-                document.getElementById('delivery-price-text').textContent = 'R50.00';
-            } else {
-                fee = 0;
-                noticeHTML = `<div class="free-delivery-banner">
-            ✅ You qualify for FREE delivery!
-        </div>`;
-                document.getElementById('delivery-price-text').textContent = 'FREE';
-            }
+            document.getElementById('delivery-price-text').textContent = 'R50.00';
         } else {
             fee = 0;
-            noticeHTML = '';
+            noticeHTML = `<div class="free-delivery-banner">
+            ✅ You qualify for FREE delivery!
+        </div>`;
+            document.getElementById('delivery-price-text').textContent = 'FREE';
         }
 
-        if (forcedFee !== null) fee = forcedFee;
-
-        const finalTotal = subtotal + fee - currentDiscount;
-
-        document.getElementById('delivery-fee').textContent = fee === 0 ? 'FREE' : formatZAR(fee);
-        document.getElementById('total').textContent = formatZAR(finalTotal);
+        document.getElementById('delivery-fee').textContent = formatZAR(fee);
+        document.getElementById('total').textContent = formatZAR(subtotal + fee);
         document.getElementById('free-delivery-notice').innerHTML = noticeHTML;
-
-        // Update discount row
-        if (currentDiscount > 0) {
-            document.getElementById('discount-row').style.display = 'flex';
-            document.getElementById('discount-amount').textContent = '- ' + formatZAR(currentDiscount);
-        } else {
-            document.getElementById('discount-row').style.display = 'none';
-        }
     }
 
-    // Coupon Logic
-    document.getElementById('apply-coupon-btn').addEventListener('click', async function () {
-        const codeInput = document.getElementById('coupon-input');
-        const code = codeInput.value.trim();
-        const msgEl = document.getElementById('coupon-message');
-
-        if (!code) {
-            msgEl.textContent = 'Please enter a code.';
-            msgEl.style.color = '#ef4444';
-            msgEl.style.display = 'block';
-            return;
-        }
-
-        this.disabled = true;
-        const originalText = this.textContent;
-        this.textContent = '...';
-
-        try {
-            const response = await fetch('/apply-coupon', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code, subtotal: subtotal })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                currentDiscount = data.discount_amount;
-                currentCoupon = data.code;
-                document.getElementById('hidden-coupon-code').value = data.code;
-
-                msgEl.textContent = data.message;
-                msgEl.style.color = '#076850';
-                msgEl.style.display = 'block';
-
-                updateOrderSummary();
-            } else {
-                msgEl.textContent = data.message;
-                msgEl.style.color = '#ef4444';
-                msgEl.style.display = 'block';
-
-                currentDiscount = 0;
-                currentCoupon = '';
-                document.getElementById('hidden-coupon-code').value = '';
-                updateOrderSummary();
-            }
-        } catch (error) {
-            msgEl.textContent = 'Error applying coupon.';
-            msgEl.style.color = '#ef4444';
-            msgEl.style.display = 'block';
-        } finally {
-            this.disabled = false;
-            this.textContent = originalText;
-        }
-    });
-
     function formatZAR(amount) {
-        return 'R' + parseFloat(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        return 'R' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     }
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('address-section').style.display = 'block';
-        updateOrderSummary();
+        updateDeliveryFee();
     });
 
     // Form validation
@@ -552,7 +456,7 @@
                 if (!input.value.trim()) {
                     e.preventDefault();
                     input.focus();
-                    alert('Please fill in all required fields');
+                    showToast('Please fill in all required fields', 'error');
                     return;
                 }
             }
@@ -563,7 +467,7 @@
                 if (!input.value.trim()) {
                     e.preventDefault();
                     input.focus();
-                    alert('Please fill in all required fields');
+                    showToast('Please fill in all required fields', 'error');
                     return;
                 }
             }

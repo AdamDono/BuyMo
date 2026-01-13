@@ -7,7 +7,7 @@ def force_ipv4():
         return [r for r in responses if r[0] == socket.AF_INET]
     socket.getaddrinfo = new_getaddrinfo
 force_ipv4()
-socket.setdefaulttimeout(60)
+socket.setdefaulttimeout(30)
 
 from flask import Flask, render_template, request, redirect, url_for, flash, abort, session, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -76,33 +76,14 @@ PAYFAST_CANCEL_URL = "https://buymo.onrender.com/cart"
 PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
 
 # Mail Configuration
-# Mail Configuration - Default to SSL (Port 465) which is more robust on Render
 app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 465))
-app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'False').lower() == 'true'
-app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'True').lower() == 'true'
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
+app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'False').lower() == 'true'
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'adamdono100@gmail.com')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
-
-# Parse MAIL_DEFAULT_SENDER to extract just the email if it's in "Name <email>" format
-default_sender = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono89@gmail.com')
-if '<' in default_sender and '>' in default_sender:
-    # Extract email from "Name <email@domain.com>" format
-    import re
-    email_match = re.search(r'<(.+?)>', default_sender)
-    if email_match:
-        app.config['MAIL_DEFAULT_SENDER'] = email_match.group(1)
-    else:
-        app.config['MAIL_DEFAULT_SENDER'] = default_sender
-else:
-    app.config['MAIL_DEFAULT_SENDER'] = default_sender
-
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono100@gmail.com')
 app.config['MAIL_DEBUG'] = True
-
-# Log mail configuration (without password)
-logger.info(f"Mail Config: Server={app.config['MAIL_SERVER']}, Port={app.config['MAIL_PORT']}, TLS={app.config['MAIL_USE_TLS']}, SSL={app.config['MAIL_USE_SSL']}")
-logger.info(f"Mail Config: Username={app.config['MAIL_USERNAME']}, Sender={app.config['MAIL_DEFAULT_SENDER']}")
-logger.info(f"Mail Config: Password={'SET' if app.config['MAIL_PASSWORD'] else 'NOT SET'}")
 
 mail = Mail(app)
 
@@ -119,6 +100,15 @@ def format_zar(amount):
 def resolve_image(image_path):
     if not image_path:
         return url_for('static', filename='uploads/default-product.png')
+    
+    # If it's a Cloudinary URL, inject optimization parameters
+    if 'res.cloudinary.com' in image_path and '/upload/' in image_path:
+        # q_auto: automatic quality compression
+        # f_auto: automatic format selection (WebP/AVIF for modern browsers)
+        # c_limit,w_800: resize if too large
+        optimized_path = image_path.replace('/upload/', '/upload/f_auto,q_auto,c_limit,w_800/')
+        return optimized_path
+        
     if image_path.startswith('http') or image_path.startswith('https'):
         return image_path
     return url_for('static', filename=image_path)
@@ -158,94 +148,28 @@ def generate_tracking_number():
     random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
     return f"BM-{date_str}-{random_str}"
 
-import smtplib
-import ssl
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
 def send_async_email(app, msg):
-    """Send email using Brevo API (HTTP) or fallback to IPv4 SMTP"""
+    """Send email in a background thread to prevent worker timeouts"""
     with app.app_context():
-        # Option A: Brevo (Sendinblue) - HTTP API (Bypasses all Firewalls)
-        brevo_key = os.getenv('BREVO_API_KEY')
-        if brevo_key:
-            try:
-                logger.info(f"THREAD START: Sending via Brevo API to {msg.recipients}")
-                url = "https://api.brevo.com/v3/smtp/email"
-                headers = {
-                    "accept": "application/json",
-                    "api-key": brevo_key,
-                    "content-type": "application/json"
-                }
-                
-                # Format for Brevo
-                payload = {
-                    "sender": {"name": "BuyMo", "email": app.config.get('MAIL_USERNAME', 'adamdono100@gmail.com')},
-                    "to": [{"email": r} for r in msg.recipients],
-                    "subject": msg.subject,
-                    "htmlContent": msg.html
-                }
-                
-                response = requests.post(url, json=payload, headers=headers, timeout=10)
-                
-                if response.status_code in [200, 201, 202]:
-                    logger.info(f"✓ THREAD SUCCESS: Email sent via Brevo! ID: {response.json().get('messageId')}")
-                    return
-                else:
-                    logger.error(f"✗ THREAD ERROR: Brevo API failed {response.status_code}")
-                    logger.error(f"  Response: {response.text}")
-                    # Fall through to SMTP if Brevo fails?
-            except Exception as e:
-                logger.error(f"✗ THREAD ERROR: Brevo Request failed: {str(e)}")
-        
-        # Option B: Gmail SMTP - Forced IPv4 (Fallback)
-        # ... (Existing SMTP Logic) ...
-        smtp_hostname = app.config.get('MAIL_SERVER', 'smtp.gmail.com')
-        smtp_port = int(app.config.get('MAIL_PORT', 465))
-        username = app.config.get('MAIL_USERNAME')
-        password = app.config.get('MAIL_PASSWORD')
-        sender = app.config.get('MAIL_DEFAULT_SENDER')
-        
-        email_msg = MIMEMultipart('alternative')
-        email_msg['Subject'] = msg.subject
-        email_msg['From'] = sender
-        email_msg['To'] = ", ".join(msg.recipients)
-        
-        if msg.html:
-            email_msg.attach(MIMEText(msg.html, 'html'))
-        
-        max_retries = 2
-        for attempt in range(1, max_retries + 1):
-            try:
-                raw_ip = socket.gethostbyname(smtp_hostname)
-                logger.info(f"THREAD START (Attempt {attempt}): Connecting to {smtp_hostname} ({raw_ip}):{smtp_port}...")
-                
-                context = ssl.create_default_context()
-                with smtplib.SMTP_SSL(raw_ip, smtp_port, context=context, timeout=45) as server:
-                    server.context.check_hostname = False
-                    server.login(username, password)
-                    server.sendmail(sender, msg.recipients, email_msg.as_string())
-
-                logger.info(f"✓ THREAD SUCCESS: Email sent to {msg.recipients}")
-                return
-
-            except Exception as e:
-                logger.error(f"✗ THREAD ERROR (Attempt {attempt}): {str(e)}")
-                if attempt == max_retries:
-                    import traceback
-                    logger.error(f"  Traceback: {traceback.format_exc()}")
-                else:
-                    time.sleep(2)
-
+        try:
+            server = app.config.get('MAIL_SERVER')
+            port = app.config.get('MAIL_PORT')
+            logger.info(f"THREAD START: Attempting email to {msg.recipients} via {server}:{port}")
+            
+            # Use the mail instance to send
+            mail.send(msg)
+            
+            logger.info(f"THREAD SUCCESS: Email delivered to {msg.recipients}")
+        except socket.timeout:
+            logger.error(f"THREAD TIMEOUT: Connection to {server} took too long.")
+        except Exception as e:
+            logger.error(f"THREAD ERROR: Failed to deliver to {msg.recipients}: {str(e)}")
 
 def send_order_email(user_email, order_details):
     """Send order confirmation email to customer via Gmail SMTP (Async)"""
     try:
-        logger.info(f"📧 Preparing order confirmation email for {user_email}")
-        logger.info(f"   Order details: Tracking={order_details.get('tracking_number')}, Total=R{order_details.get('total_amount')}, Items={order_details.get('items_count')}")
-        
         if not app.config.get('MAIL_PASSWORD'):
-            logger.error("✗ MAIL_PASSWORD not set. Cannot send email.")
+            logger.error("MAIL_PASSWORD not set. Cannot send email.")
             return False
             
         msg = Message(
@@ -259,21 +183,17 @@ def send_order_email(user_email, order_details):
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True
         thread.start()
-        logger.info(f"✓ Order email thread started for {user_email}")
+        logger.info(f"Order email thread started for {user_email}")
         return True
     except Exception as e:
-        logger.error(f"✗ Failed to start order email thread: {str(e)}")
-        import traceback
-        logger.error(f"  Traceback: {traceback.format_exc()}")
+        logger.error(f"Failed to start order email thread: {str(e)}")
         return False
 
 def send_welcome_email(user_email, username):
     """Send a premium welcome email to new users via Gmail SMTP (Async)"""
     try:
-        logger.info(f"📧 Preparing welcome email for {user_email} (username: {username})")
-        
         if not app.config.get('MAIL_PASSWORD'):
-            logger.error("✗ MAIL_PASSWORD not set. Cannot send welcome email.")
+            logger.error("MAIL_PASSWORD not set. Cannot send welcome email.")
             return False
             
         msg = Message(
@@ -287,12 +207,10 @@ def send_welcome_email(user_email, username):
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True
         thread.start()
-        logger.info(f"✓ Welcome email thread started for {user_email}")
+        logger.info(f"Welcome email thread started for {user_email}")
         return True
     except Exception as e:
-        logger.error(f"✗ Failed to start welcome email thread: {str(e)}")
-        import traceback
-        logger.error(f"  Traceback: {traceback.format_exc()}")
+        logger.error(f"Failed to start welcome email thread: {str(e)}")
         return False
 
 def send_abandoned_cart_email(user_email, username, cart_items):
@@ -319,96 +237,11 @@ def send_abandoned_cart_email(user_email, username, cart_items):
         logger.error(f"Failed to start abandoned cart email thread: {str(e)}")
         return False
 
-def send_order_status_email(user_email, username, order_id, status, **kwargs):
-    """Send order status update email (Async)"""
-    try:
-        if not app.config.get('MAIL_PASSWORD'):
-            logger.error("MAIL_PASSWORD not set. Cannot send status email.")
-            return False
-            
-        msg = Message(
-            f"Update on your BuyMo Order #{order_id}",
-            sender=app.config['MAIL_DEFAULT_SENDER'],
-            recipients=[user_email]
-        )
-        msg.html = render_template('emails/order_status_update.html', 
-                                 username=username, 
-                                 order_id=order_id,
-                                 status=status,
-                                 year=datetime.now().year,
-                                 driver_name=kwargs.get('driver_name'),
-                                 driver_phone=kwargs.get('driver_phone'),
-                                 tracking_link=kwargs.get('tracking_link'),
-                                 delivered_at=kwargs.get('delivered_at'),
-                                 proof_of_delivery=kwargs.get('proof_of_delivery'),
-                                 delivery_notes=kwargs.get('delivery_notes'),
-                                 shipped_date=kwargs.get('shipped_date'),
-                                 estimated_delivery_date=kwargs.get('estimated_delivery_date'))
-        
-        thread = Thread(target=send_async_email, args=(app, msg))
-        thread.daemon = True
-        thread.start()
-        logger.info(f"Order status email thread started for Order #{order_id}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to start order status email thread: {str(e)}")
-        return False
-
-def send_inventory_alert(product_name, current_stock):
-    """Notify admin when stock is low (<= 5)"""
-    try:
-        with app.app_context():
-            admin_email = app.config.get('MAIL_DEFAULT_SENDER')
-            if not admin_email:
-                logger.warning("No admin email configured for inventory alerts")
-                return
-
-            msg = Message(
-                f'⚠️ Low Stock Alert: {product_name}',
-                recipients=[admin_email]
-            )
-            msg.body = f"""
-Low Stock Alert for BuyMo
-
-Product: {product_name}
-Current Stock: {current_stock}
-
-Please restock this item as soon as possible to avoid losing sales.
-
-View Admin Dashboard: {url_for('admin_products', _external=True)}
-            """
-            
-            # Use simple HTML for the alert
-            msg.html = f"""
-            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                <h2 style="color: #ef4444;">⚠️ Low Stock Alert</h2>
-                <p>The following product is almost out of stock:</p>
-                <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                    <p style="margin: 5px 0;"><strong>Product:</strong> {product_name}</p>
-                    <p style="margin: 5px 0;"><strong>Remaining Quantity:</strong> <span style="color: #ef4444; font-weight: bold;">{current_stock}</span></p>
-                </div>
-                <a href="{url_for('admin_products', _external=True)}" 
-                   style="display: inline-block; padding: 12px 24px; background: #076850; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                   Manage Inventory
-                </a>
-            </div>
-            """
-            
-            thread = Thread(target=send_async_email, args=(app, msg))
-            thread.daemon = True
-            thread.start()
-            logger.info(f"Inventory alert sent for {product_name}")
-    except Exception as e:
-        logger.error(f"Error sending inventory alert: {str(e)}")
-
 def send_reset_email(user_email, username, reset_url):
     """Send a secure password reset link via Gmail SMTP (Async)"""
     try:
-        logger.info(f"📧 Preparing password reset email for {user_email} (username: {username})")
-        logger.info(f"   Reset URL: {reset_url}")
-        
         if not app.config.get('MAIL_PASSWORD'):
-            logger.error("✗ MAIL_PASSWORD not set. Cannot send reset email.")
+            logger.error("MAIL_PASSWORD not set. Cannot send reset email.")
             return False
             
         msg = Message(
@@ -424,12 +257,10 @@ def send_reset_email(user_email, username, reset_url):
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True
         thread.start()
-        logger.info(f"✓ Reset email thread started for {user_email}")
+        logger.info(f"Reset email thread started for {user_email}")
         return True
     except Exception as e:
-        logger.error(f"✗ Failed to start reset email thread: {str(e)}")
-        import traceback
-        logger.error(f"  Traceback: {traceback.format_exc()}")
+        logger.error(f"Failed to start reset email thread: {str(e)}")
         return False
 
 @app.context_processor
@@ -451,7 +282,7 @@ def inject_cart_count():
                 cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
                 cart_count = cur.fetchone()[0]
                 cur.close()
-                conn.close()
+                database.return_db_connection(conn)
                 # Cache for this session
                 session[cache_key] = cart_count
             except Exception as e:
@@ -469,78 +300,43 @@ def index():
         conn = database.get_db_connection()
         cur = conn.cursor()
         
-        # Get featured products (latest 8 active products)
-        try:
-            cur.execute('''
-                SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
-                FROM products p
-                JOIN categories c ON p.category_id = c.id
-                WHERE COALESCE(p.is_active, true) = true
-                ORDER BY p.id DESC
-                LIMIT 8
-            ''')
-            featured_products = cur.fetchall()
-        except Exception as e:
-            logger.error(f"Error fetching featured products: {str(e)}")
-            featured_products = []
+        # 1. Get featured products + categories in one query
+        cur.execute('''
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
+            FROM products p
+            JOIN categories c ON p.category_id = c.id
+            ORDER BY p.id DESC
+            LIMIT 8
+        ''')
+        featured_products = cur.fetchall()
         
-        # Get all categories
-        try:
-            cur.execute('SELECT * FROM categories ORDER BY name')
-            categories = cur.fetchall()
-        except Exception as e:
-            logger.error(f"Error fetching categories: {str(e)}")
-            categories = []
+        # 2. Get all categories
+        cur.execute('SELECT * FROM categories ORDER BY name')
+        categories = cur.fetchall()
         
-        # Get stats for social proof
-        try:
-            cur.execute('SELECT COUNT(*) FROM products')
-            total_products = cur.fetchone()[0]
-        except Exception as e:
-            logger.error(f"Error fetching product count: {str(e)}")
-            total_products = 0
-        
-        try:
-            cur.execute('SELECT COUNT(*) FROM orders')
-            total_orders = cur.fetchone()[0]
-        except Exception as e:
-            logger.error(f"Error fetching order count: {str(e)}")
-            total_orders = 0
-        
-        try:
-            cur.execute('SELECT COUNT(*) FROM users')
-            total_customers = cur.fetchone()[0]
-        except Exception as e:
-            logger.error(f"Error fetching user count: {str(e)}")
-            total_customers = 0
-
-        # Fetch average ratings and review counts for featured products
-        avg_ratings = {}
-        review_counts = {}
-        # We need to loop through featured_products if they exist
-        if featured_products:
-            for product in featured_products:
-                cur.execute('''
-                    SELECT AVG(rating), COUNT(*) FROM reviews WHERE product_id = %s
-                ''', (product[0],))
-                result = cur.fetchone()
-                avg_ratings[product[0]] = round(result[0], 1) if result[0] else 0
-                review_counts[product[0]] = result[1] if result[1] else 0
+        # 3. Get all stats in one consolidated query (Optimized)
+        cur.execute('''
+            SELECT 
+                (SELECT COUNT(*) FROM products) as total_products,
+                (SELECT COUNT(*) FROM orders) as total_orders,
+                (SELECT COUNT(*) FROM users) as total_customers
+        ''')
+        stats = cur.fetchone()
+        total_products, total_orders, total_customers = stats if stats else (0, 0, 0)
         
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         
         return render_template('landing.html', 
                              featured_products=featured_products,
                              categories=categories,
                              total_products=total_products,
                              total_orders=total_orders,
-                             total_customers=total_customers,
-                             avg_ratings=avg_ratings,
-                             review_counts=review_counts)
+                             total_customers=total_customers)
     except Exception as e:
         logger.error(f"Critical error in landing page: {str(e)}")
-        # Fallback: redirect to signup if landing page fails
+        if 'conn' in locals() and conn:
+            database.return_db_connection(conn)
         return redirect(url_for('signup'))
 
 @app.route('/get-started')
@@ -658,28 +454,19 @@ def home():
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', "").strip()
 
-    # Check if is_active column exists
-    cur.execute("""
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name='products' AND column_name='is_active'
-    """)
-    has_is_active = cur.fetchone() is not None
-    
-    if has_is_active:
-        query = '''
-            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
-            FROM products p
-            JOIN categories c ON p.category_id = c.id
-            WHERE COALESCE(p.is_active, true) = true
-        '''
-    else:
-        query = '''
-            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity
-            FROM products p
-            JOIN categories c ON p.category_id = c.id
-            WHERE 1=1
-        '''
+    # Base query with ratings integrated via JOIN to avoid huge N+1 loops
+    query = '''
+        SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
+               COALESCE(r.avg_rating, 0), COALESCE(r.review_count, 0)
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        LEFT JOIN (
+            SELECT product_id, AVG(rating) as avg_rating, COUNT(*) as review_count
+            FROM reviews
+            GROUP BY product_id
+        ) r ON p.id = r.product_id
+        WHERE 1=1
+    '''
     params = []
 
     if search_query:
@@ -698,24 +485,23 @@ def home():
         params.append(float(max_price))
 
     cur.execute(query, params)
-    products = cur.fetchall()
+    products_data = cur.fetchall()
+    
+    products = []
+    avg_ratings = {}
+    review_counts = {}
+    
+    for p in products_data:
+        # Reconstruct format for your existing template
+        products.append(p[:7])
+        avg_ratings[p[0]] = round(float(p[7]), 1)
+        review_counts[p[0]] = p[8]
 
     cur.execute('SELECT * FROM categories;')
     categories = cur.fetchall()
 
-    # Fetch average ratings and review counts for all products
-    avg_ratings = {}
-    review_counts = {}
-    for product in products:
-        cur.execute('''
-            SELECT AVG(rating), COUNT(*) FROM reviews WHERE product_id = %s
-        ''', (product[0],))
-        result = cur.fetchone()
-        avg_ratings[product[0]] = round(result[0], 1) if result[0] else 0
-        review_counts[product[0]] = result[1] if result[1] else 0
-
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
 
     return render_template('home.html', products=products, categories=categories, 
                          search_query=search_query, category_filter=category_filter, 
@@ -760,7 +546,7 @@ def product(product_id):
         related_products = cur.fetchall()
     
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
     
     if product:
         return render_template('product.html',
@@ -799,7 +585,7 @@ def submit_review(product_id):
         flash('An error occurred while submitting the review.', 'error')
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
 
     return redirect(url_for('product', product_id=product_id))
 
@@ -815,7 +601,7 @@ def add_product():
     cur.execute('SELECT * FROM categories;')
     categories = cur.fetchall()
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
 
     if request.method == 'POST':
         name = request.form.get('name')
@@ -885,7 +671,7 @@ def add_product():
             conn.rollback()
         finally:
             cur.close()
-            conn.close()
+            database.return_db_connection(conn)
 
     return render_template('add_product.html', categories=categories)
 
@@ -898,22 +684,6 @@ def add_to_cart(product_id):
     cur = conn.cursor()
 
     try:
-        # Check current stock
-        cur.execute('SELECT remaining_quantity, name FROM products WHERE id = %s', (product_id,))
-        product = cur.fetchone()
-        
-        if not product:
-            flash('Product not found.', 'error')
-            return redirect(url_for('home'))
-            
-        if product[0] <= 0:
-            flash(f'Sorry, {product[1]} is currently out of stock. You can add it to your wishlist!', 'error')
-            return redirect(url_for('product', product_id=product_id))
-
-        if quantity > product[0]:
-            flash(f'Only {product[0]} units of {product[1]} available.', 'warning')
-            quantity = product[0]
-
         cur.execute('''
             SELECT id, quantity FROM cart_items 
             WHERE user_id = %s AND product_id = %s;
@@ -922,11 +692,6 @@ def add_to_cart(product_id):
 
         if cart_item:
             new_quantity = cart_item[1] + quantity
-            # Ensure total cart quantity doesn't exceed stock
-            if new_quantity > product[0]:
-                new_quantity = product[0]
-                flash(f'Cart updated, but limited to available stock ({product[0]} units).', 'info')
-                
             cur.execute('''
                 UPDATE cart_items 
                 SET quantity = %s 
@@ -947,12 +712,12 @@ def add_to_cart(product_id):
         flash('Product added to cart!', 'success')
     except Exception as e:
         logger.error(f"Error adding to cart: {str(e)}")
-        flash('Could not add product to cart.', 'error')
+        flash('An error occurred while adding the product to the cart.', 'error')
     finally:
         cur.close()
-        conn.close()
-        
-    return redirect(request.referrer or url_for('home'))
+        database.return_db_connection(conn)
+
+    return redirect(url_for('cart'))
 
 @app.route('/api/cart-count')
 @login_required
@@ -964,38 +729,11 @@ def api_cart_count():
         cur.execute('SELECT COUNT(*) FROM cart_items WHERE user_id = %s', (current_user.id,))
         count = cur.fetchone()[0]
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         return jsonify({'count': count})
     except Exception as e:
         logger.error(f"Error fetching cart count: {str(e)}")
         return jsonify({'count': 0})
-
-@app.context_processor
-def inject_wishlist():
-    """Inject wishlist product IDs into all templates for authenticated users"""
-    if current_user.is_authenticated:
-        # We need a lightweight way to get just IDs. 
-        # Using a new optimized query would be best, but for now we reuse get_user_wishlist
-        # A better approach for scale: create get_user_wishlist_ids(user_id)
-        wishlist_products = database.get_user_wishlist(current_user.id)
-        wishlist_ids = [p[0] for p in wishlist_products]
-        return {'wishlist_ids': wishlist_ids}
-    return {'wishlist_ids': []}
-
-@app.route('/wishlist')
-@login_required
-def wishlist():
-    """View user's wishlist"""
-    products = database.get_user_wishlist(current_user.id)
-    return render_template('wishlist.html', products=products)
-
-@app.route('/wishlist/toggle/<int:product_id>', methods=['POST'])
-@login_required
-def toggle_wishlist(product_id):
-    """Toggle product in wishlist (AJAX)"""
-    added = database.toggle_wishlist_item(current_user.id, product_id)
-    msg = "Added to wishlist" if added else "Removed from wishlist"
-    return jsonify({'status': 'success', 'added': added, 'message': msg})
 
 @app.route('/cart')
 @login_required
@@ -1014,7 +752,7 @@ def cart():
     total_price = sum(item[3] * item[5] for item in cart_items) if cart_items else 0
     
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
     
     return render_template('cart.html', 
                          cart_items=cart_items, 
@@ -1039,7 +777,7 @@ def checkout():
         if not cart_items:
             flash('Your cart is empty.', 'warning')
             cur.close()
-            conn.close()
+            database.return_db_connection(conn)
             return redirect(url_for('cart'))
         
         subtotal = float(sum(item[3] * item[5] for item in cart_items))
@@ -1073,7 +811,7 @@ def checkout():
             last_order = None
         
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         
         from datetime import date
         return render_template('checkout.html', 
@@ -1084,68 +822,6 @@ def checkout():
                              today=date.today().isoformat())
     
     # POST: Process checkout and redirect to PayFast
-    # ... (rest of the code)
-
-@app.route('/apply-coupon', methods=['POST'])
-@login_required
-def apply_coupon():
-    """Validate and calculate discount for a coupon code"""
-    code = request.json.get('code', '').strip().upper()
-    subtotal = float(request.json.get('subtotal', 0))
-    
-    if not code:
-        return jsonify({'success': False, 'message': 'Please enter a coupon code.'})
-        
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    
-    try:
-        cur.execute('''
-            SELECT discount_type, discount_value, min_purchase, usage_limit, usage_count, valid_until, is_active
-            FROM coupons WHERE code = %s
-        ''', (code,))
-        coupon = cur.fetchone()
-        
-        if not coupon:
-            return jsonify({'success': False, 'message': 'Invalid coupon code.'})
-            
-        discount_type, discount_value, min_purchase, usage_limit, usage_count, valid_until, is_active = coupon
-        
-        if not is_active:
-            return jsonify({'success': False, 'message': 'This coupon is no longer active.'})
-            
-        if valid_until and valid_until < datetime.now():
-            return jsonify({'success': False, 'message': 'This coupon has expired.'})
-            
-        if usage_limit and usage_count >= usage_limit:
-            return jsonify({'success': False, 'message': 'This coupon has reached its usage limit.'})
-            
-        if subtotal < float(min_purchase):
-            return jsonify({'success': False, 'message': f'Minimum purchase of {zar_filter(min_purchase)} required for this coupon.'})
-            
-        # Calculate discount
-        discount_amount = 0
-        if discount_type == 'percent':
-            discount_amount = subtotal * (float(discount_value) / 100.0)
-        else:
-            discount_amount = float(discount_value)
-            
-        # Ensure discount doesn't exceed subtotal
-        discount_amount = min(discount_amount, subtotal)
-        
-        return jsonify({
-            'success': True, 
-            'message': f'Coupon "{code}" applied!',
-            'discount_amount': discount_amount,
-            'code': code
-        })
-        
-    except Exception as e:
-        logger.error(f"Error applying coupon: {str(e)}")
-        return jsonify({'success': False, 'message': 'An error occurred. Please try again.'})
-    finally:
-        cur.close()
-        conn.close()
     try:
         session['user_id'] = current_user.id
 
@@ -1168,22 +844,6 @@ def apply_coupon():
 
         subtotal = float(sum(item[3] * item[1] for item in cart_items))
         
-        # Get coupon info
-        coupon_code = request.form.get('coupon_code', '').strip().upper()
-        discount_amount = 0.0
-        
-        if coupon_code:
-            cur.execute('SELECT discount_type, discount_value, min_purchase FROM coupons WHERE code = %s AND is_active = TRUE', (coupon_code,))
-            coupon = cur.fetchone()
-            if coupon:
-                d_type, d_val, min_p = coupon
-                if subtotal >= float(min_p):
-                    if d_type == 'percent':
-                        discount_amount = subtotal * (float(d_val) / 100.0)
-                    else:
-                        discount_amount = float(d_val)
-                    discount_amount = min(discount_amount, subtotal)
-
         # Get delivery info from form
         delivery_method = request.form.get('delivery_method', 'delivery')
         full_name = request.form.get('full_name')
@@ -1207,7 +867,7 @@ def apply_coupon():
             postal_code = None
             pickup_date = request.form.get('pickup_date')
         
-        total_price = subtotal + delivery_fee - discount_amount
+        total_price = subtotal + delivery_fee
 
         # Prepare delivery info JSON
         delivery_info = {
@@ -1220,9 +880,7 @@ def apply_coupon():
             'province': province,
             'postal_code': postal_code,
             'pickup_date': pickup_date,
-            'delivery_fee': float(delivery_fee),
-            'discount_amount': float(discount_amount),
-            'coupon_code': coupon_code
+            'delivery_fee': float(delivery_fee)
         }
         
         cart_items_json = json.dumps([{
@@ -1273,7 +931,7 @@ def apply_coupon():
         return redirect(url_for('cart'))
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
 
 @app.route('/payfast/return', methods=['GET'])
 def payfast_return():
@@ -1346,9 +1004,9 @@ def payfast_notify():
                 INSERT INTO orders (
                     user_id, tracking_number, total_amount, delivery_method, full_name, phone,
                     street_address, suburb, city, province, postal_code,
-                    delivery_fee, pickup_date, status, discount_amount, coupon_code
+                    delivery_fee, pickup_date, status
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 user_id,
@@ -1364,16 +1022,9 @@ def payfast_notify():
                 delivery_info.get('postal_code'),
                 delivery_info.get('delivery_fee', 0),
                 delivery_info.get('pickup_date'),
-                'processing',
-                delivery_info.get('discount_amount', 0),
-                delivery_info.get('coupon_code')
+                'processing'
             ))
             order_id = cur.fetchone()[0]
-
-            # Update coupon usage count if used
-            c_code = delivery_info.get('coupon_code')
-            if c_code:
-                cur.execute('UPDATE coupons SET usage_count = usage_count + 1 WHERE code = %s', (c_code,))
 
             for item in cart_items:
                 cur.execute('''
@@ -1386,13 +1037,7 @@ def payfast_notify():
                     UPDATE products 
                     SET remaining_quantity = remaining_quantity - %s
                     WHERE id = %s
-                    RETURNING name, remaining_quantity
                 ''', (item['quantity'], item['product_id']))
-                res = cur.fetchone()
-                if res:
-                    p_name, p_qty = res
-                    if p_qty <= 5:
-                        send_inventory_alert(p_name, p_qty)
 
             cur.execute('''
                 DELETE FROM cart_items 
@@ -1428,7 +1073,7 @@ def payfast_notify():
             logger.error(f"Error processing ITN: {str(e)}")
             return "Error", 500
         finally:
-            conn.close()
+            database.return_db_connection(conn)
 
     return "OK", 200
 
@@ -1460,7 +1105,7 @@ def remove_from_cart(item_id):
         conn.rollback()
         flash(f'Error removing item: {str(e)}', 'error')
     finally:
-        conn.close()
+        database.return_db_connection(conn)
     
     return redirect(url_for('cart'))
 
@@ -1495,7 +1140,7 @@ def update_cart(item_id):
         flash(f'Error updating cart: {str(e)}', 'error')
     finally:
         if conn:
-            conn.close()
+            database.return_db_connection(conn)
     
     return redirect(url_for('cart'))
 
@@ -1523,7 +1168,6 @@ def edit_product(product_id):
             price = float(request.form['price'])
             description = request.form['description']
             category_id = int(request.form['category'])
-            remaining_quantity = int(request.form.get('remaining_quantity', product[5]))  # Get stock or keep current
             image_url = product[4]  # Keep existing image
             image = request.files.get('image')
 
@@ -1557,9 +1201,9 @@ def edit_product(product_id):
 
             cur.execute('''
                 UPDATE products 
-                SET name = %s, price = %s, description = %s, image = %s, category_id = %s, remaining_quantity = %s
+                SET name = %s, price = %s, description = %s, image = %s, category_id = %s
                 WHERE id = %s
-            ''', (name, price, description, image_url, category_id, remaining_quantity, product_id))
+            ''', (name, price, description, image_url, category_id, product_id))
             
             conn.commit()
             flash('Product updated successfully!', 'success')
@@ -1575,7 +1219,7 @@ def edit_product(product_id):
         return redirect(url_for('edit_product', product_id=product_id))
     
     finally:
-        conn.close()
+        database.return_db_connection(conn)
 
 @app.route('/delete-product/<int:product_id>', methods=['POST'])
 @login_required
@@ -1616,7 +1260,7 @@ def delete_product(product_id):
         logger.error(f'Error deleting product: {str(e)}')
         flash(f'Error: {str(e)}', 'error')
     finally:
-        conn.close()
+        database.return_db_connection(conn)
     
     return redirect(url_for('admin_products'))
 
@@ -1626,37 +1270,8 @@ def toggle_product(product_id):
     if not current_user.is_admin:
         abort(403)
     
-    conn = database.get_db_connection()
-    try:
-        cur = conn.cursor()
-        
-        # Get current status
-        cur.execute('SELECT is_active, name FROM products WHERE id = %s', (product_id,))
-        result = cur.fetchone()
-        
-        if not result:
-            flash('Product not found.', 'error')
-            return redirect(url_for('admin_products'))
-        
-        current_status = result[0]
-        product_name = result[1]
-        new_status = not current_status
-        
-        # Toggle the status
-        cur.execute('UPDATE products SET is_active = %s WHERE id = %s', (new_status, product_id))
-        conn.commit()
-        
-        status_text = "enabled" if new_status else "disabled"
-        flash(f'Product "{product_name}" has been {status_text}.', 'success')
-        
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"Error toggling product: {str(e)}")
-        flash('Error toggling product status.', 'error')
-    finally:
-        cur.close()
-        conn.close()
-    
+    # Toggle functionality disabled - is_active column doesn't exist in current schema
+    flash('Product toggle feature temporarily disabled.', 'info')
     return redirect(url_for('admin_products'))
 
 @app.route('/profile', methods=['GET', 'POST'])
@@ -1713,16 +1328,14 @@ def profile():
         conn = database.get_db_connection()
         cur = conn.cursor()
         cur.execute('''
-            SELECT id, total_amount, status, order_date, tracking_number,
-                   driver_name, driver_phone, tracking_link, delivered_at,
-                   proof_of_delivery, delivery_notes, shipped_date, estimated_delivery_date
+            SELECT id, total_amount, status, order_date, tracking_number 
             FROM orders 
             WHERE user_id = %s 
             ORDER BY order_date DESC
         ''', (current_user.id,))
         orders = cur.fetchall()
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
     except Exception as e:
         logger.error(f"Error fetching user orders: {e}")
 
@@ -1776,7 +1389,7 @@ def change_password():
         flash(f"Error updating password: {str(e)}", "error")
     finally:
         if conn:
-            conn.close()
+            database.return_db_connection(conn)
             
     return redirect(url_for('profile'))
 
@@ -1801,7 +1414,7 @@ def load_user(user_id):
     cur.execute('SELECT * FROM users WHERE id = %s;', (user_id,))
     user_data = cur.fetchone()
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
     if user_data:
         return User(id=user_data[0],
                   username=user_data[1],
@@ -1880,19 +1493,35 @@ def orders():
                 'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
             })
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         return render_template('orders.html', orders=order_history)
+
+    order_history = []
+    # Optimized: Fetch ALL items for ALL orders in one go (No N+1)
+    order_ids = [o[0] for o in completed_orders]
+    all_items = {}
+    if order_ids:
+        cur.execute('''
+            SELECT oi.order_id, p.name, p.image, oi.quantity, oi.price_at_purchase
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ANY(%s);
+        ''', (order_ids,))
+        items_data = cur.fetchall()
+        for item in items_data:
+            oid = item[0]
+            if oid not in all_items:
+                all_items[oid] = []
+            all_items[oid].append({
+                'name': item[1], 
+                'image': item[2], 
+                'quantity': item[3], 
+                'price_at_purchase': float(item[4])
+            })
 
     order_history = []
     for order in completed_orders:
         order_id = order[0]
-        cur.execute('''
-            SELECT p.name, p.image, oi.quantity, oi.price_at_purchase
-            FROM order_items oi
-            JOIN products p ON oi.product_id = p.id
-            WHERE oi.order_id = %s;
-        ''', (order_id,))
-        order_items = cur.fetchall()
         order_history.append({
             'id': order_id,
             'total_amount': float(order[1]),
@@ -1909,66 +1538,13 @@ def orders():
             'delivery_fee': float(order[12]) if order[12] else 0,
             'pickup_date': order[13],
             'tracking_number': order[14],
-            'order_items': [{'name': item[0], 'image': item[1], 'quantity': item[2], 'price_at_purchase': float(item[3])} for item in order_items]
+            'order_items': all_items.get(order_id, [])
         })
 
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
 
     return render_template('orders.html', orders=order_history)
-
-@app.route('/admin')
-@login_required
-def admin_dashboard():
-    if not current_user.is_admin:
-        flash('Access denied. Admin only.', 'error')
-        return redirect(url_for('home'))
-        
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    
-    # 1. Stats
-    cur.execute("SELECT SUM(total_amount) FROM orders")
-    total_revenue = cur.fetchone()[0] or 0.0
-    
-    cur.execute("SELECT COUNT(*) FROM orders")
-    total_orders = cur.fetchone()[0]
-    
-    cur.execute("SELECT COUNT(*) FROM users")
-    total_customers = cur.fetchone()[0]
-    
-    cur.execute("SELECT COUNT(*) FROM products WHERE remaining_quantity <= 5")
-    low_stock_count = cur.fetchone()[0]
-    
-    # 2. Chart Data (Last 7 Days)
-    today = datetime.now()
-    chart_labels = []
-    chart_values = []
-    
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        day_str = day.strftime('%Y-%m-%d')
-        chart_labels.append(day.strftime('%a %d')) # e.g., "Mon 05"
-        
-        # Query for specific day
-        cur.execute("""
-            SELECT SUM(total_amount) 
-            FROM orders 
-            WHERE DATE(order_date) = %s
-        """, (day_str,))
-        val = cur.fetchone()[0]
-        chart_values.append(float(val) if val else 0.0)
-        
-    cur.close()
-    conn.close()
-    
-    return render_template('admin_dashboard.html',
-                         total_revenue=total_revenue,
-                         total_orders=total_orders,
-                         total_customers=total_customers,
-                         low_stock_count=low_stock_count,
-                         chart_labels=chart_labels,
-                         chart_values=chart_values)
 
 @app.route('/admin/products')
 @login_required
@@ -1984,10 +1560,10 @@ def admin_products():
     cur.execute('''
         SELECT p.id, p.name, p.price, p.remaining_quantity, p.image,
                COUNT(DISTINCT oi.order_id) as order_count,
-               COALESCE(p.is_active, true) as is_active
+               true as is_active
         FROM products p
         LEFT JOIN order_items oi ON p.id = oi.product_id
-        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image, p.is_active
+        GROUP BY p.id, p.name, p.price, p.remaining_quantity, p.image
         ORDER BY p.id DESC
     ''')
     products = cur.fetchall()
@@ -2005,7 +1581,7 @@ def admin_products():
         })
     
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
     
     return render_template('admin_products.html', products=products_list)
 
@@ -2033,7 +1609,7 @@ def admin_abandoned_carts():
     abandoned_carts = cur.fetchall()
     
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
     
     return render_template('admin_abandoned_carts.html', carts=abandoned_carts)
 
@@ -2072,7 +1648,7 @@ def send_cart_reminders():
             sent_count += 1
             
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
     
     flash(f'Successfully sent {sent_count} reminder emails!', 'success')
     return redirect(url_for('admin_abandoned_carts'))
@@ -2113,7 +1689,7 @@ def admin_orders():
         })
     
     cur.close()
-    conn.close()
+    database.return_db_connection(conn)
     
     return render_template('admin_orders.html', orders=orders_list)
 
@@ -2134,88 +1710,12 @@ def admin_update_order_status(order_id):
     cur = conn.cursor()
     
     try:
-        # Get user details for email notification
         cur.execute('''
-            SELECT u.email, u.username 
-            FROM orders o
-            JOIN users u ON o.user_id = u.id
-            WHERE o.id = %s
-        ''', (order_id,))
-        user_info = cur.fetchone()
-
-        # Prepare update query based on status
-        if new_status == 'shipped':
-            # Get driver details from form
-            driver_name = request.form.get('driver_name', '').strip()
-            driver_phone = request.form.get('driver_phone', '').strip()
-            tracking_link = request.form.get('tracking_link', '').strip()
-            shipped_date = request.form.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
-            estimated_delivery_date = request.form.get('estimated_delivery_date', '')
-            
-            cur.execute('''
-                UPDATE orders 
-                SET status = %s, 
-                    status_updated_at = CURRENT_TIMESTAMP,
-                    driver_name = %s,
-                    driver_phone = %s,
-                    tracking_link = %s,
-                    shipped_date = %s,
-                    estimated_delivery_date = %s
-                WHERE id = %s
-            ''', (new_status, driver_name, driver_phone, tracking_link, shipped_date, estimated_delivery_date, order_id))
-            
-        elif new_status == 'delivered':
-            # Get delivery confirmation details
-            delivered_at = request.form.get('delivered_at', datetime.now().strftime('%Y-%m-%d %H:%M'))
-            proof_of_delivery = request.form.get('proof_of_delivery', '').strip()  # Image URL from upload
-            delivery_notes = request.form.get('delivery_notes', '').strip()
-            
-            cur.execute('''
-                UPDATE orders 
-                SET status = %s, 
-                    status_updated_at = CURRENT_TIMESTAMP,
-                    delivered_at = %s,
-                    proof_of_delivery = %s,
-                    delivery_notes = %s
-                WHERE id = %s
-            ''', (new_status, delivered_at, proof_of_delivery, delivery_notes, order_id))
-            
-        else:
-            # Processing status - simple update
-            cur.execute('''
-                UPDATE orders 
-                SET status = %s, status_updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            ''', (new_status, order_id))
-        
+            UPDATE orders 
+            SET status = %s, status_updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (new_status, order_id))
         conn.commit()
-        
-        # Fetch updated order details for email
-        cur.execute('''
-            SELECT driver_name, driver_phone, tracking_link, 
-                   delivered_at, proof_of_delivery, delivery_notes,
-                   shipped_date, estimated_delivery_date
-            FROM orders WHERE id = %s
-        ''', (order_id,))
-        order_details = cur.fetchone()
-        
-        # Send notification email with details
-        if user_info:
-            send_order_status_email(
-                user_info[0], 
-                user_info[1], 
-                order_id, 
-                new_status,
-                driver_name=order_details[0] if order_details else None,
-                driver_phone=order_details[1] if order_details else None,
-                tracking_link=order_details[2] if order_details else None,
-                delivered_at=order_details[3] if order_details else None,
-                proof_of_delivery=order_details[4] if order_details else None,
-                delivery_notes=order_details[5] if order_details else None,
-                shipped_date=order_details[6] if order_details else None,
-                estimated_delivery_date=order_details[7] if order_details else None
-            )
-            
         flash(f'Order #{order_id} status updated to {new_status.title()}!', 'success')
     except Exception as e:
         conn.rollback()
@@ -2223,7 +1723,7 @@ def admin_update_order_status(order_id):
         flash('Error updating order status.', 'error')
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
     
     return redirect(url_for('admin_orders'))
 
@@ -2295,7 +1795,7 @@ def admin_order_details(order_id):
         return jsonify({'error': 'Failed to fetch order details'}), 500
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
 
 @app.route('/admin/migrate-database', methods=['GET', 'POST'])
 @login_required
@@ -2388,7 +1888,7 @@ def migrate_database():
             return render_template('admin_migrate.html', results=[f"Error: {str(e)}"], migrated=False)
         finally:
             cur.close()
-            conn.close()
+            database.return_db_connection(conn)
     
     return render_template('admin_migrate.html', results=None, migrated=False)
 
@@ -2426,7 +1926,7 @@ def cleanup_test_users():
         flash(f'Cleanup failed: {str(e)}', 'error')
     finally:
         cur.close()
-        conn.close()
+        database.return_db_connection(conn)
         
     return redirect(url_for('home'))
 
@@ -2450,99 +1950,6 @@ def admin_test_email():
         return "SUCCESS: Test email sent! Check your inbox."
     except Exception as e:
         return f"CRITICAL FAILURE: {str(e)}<br><br>Check Render Env Vars: MAIL_SERVER, MAIL_PORT, MAIL_USE_TLS"
-
-@app.route('/admin/coupons')
-@login_required
-def admin_coupons():
-    if current_user.role != 'admin':
-        return redirect(url_for('home'))
-        
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    cur.execute('SELECT id, code, discount_type, discount_value, min_purchase, usage_limit, usage_count, valid_until, is_active FROM coupons ORDER BY id DESC')
-    coupons = cur.fetchall()
-    cur.close()
-    conn.close()
-    return render_template('admin_coupons.html', coupons=coupons)
-
-@app.route('/admin/coupons/add', methods=['POST'])
-@login_required
-def add_coupon():
-    if current_user.role != 'admin':
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
-        
-    code = request.form.get('code', '').strip().upper()
-    discount_type = request.form.get('discount_type')
-    discount_value = float(request.form.get('discount_value', 0))
-    min_purchase = float(request.form.get('min_purchase', 0))
-    usage_limit = request.form.get('usage_limit')
-    valid_until = request.form.get('valid_until')
-    
-    if not code:
-        flash('Coupon code is required.', 'error')
-        return redirect(url_for('admin_coupons'))
-        
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute('''
-            INSERT INTO coupons (code, discount_type, discount_value, min_purchase, usage_limit, valid_until)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        ''', (code, discount_type, discount_value, min_purchase, 
-              int(usage_limit) if usage_limit and usage_limit.strip() else None, 
-              valid_until if valid_until and valid_until.strip() else None))
-        conn.commit()
-        flash(f'Coupon {code} added successfully!', 'success')
-    except Exception as e:
-        logger.error(f"Error adding coupon: {e}")
-        flash('Error adding coupon. Code might already exist.', 'error')
-    finally:
-        cur.close()
-        conn.close()
-        
-    return redirect(url_for('admin_coupons'))
-
-@app.route('/admin/coupons/toggle/<int:coupon_id>', methods=['POST'])
-@login_required
-def toggle_coupon(coupon_id):
-    if current_user.role != 'admin':
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
-        
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute('UPDATE coupons SET is_active = NOT is_active WHERE id = %s', (coupon_id,))
-        conn.commit()
-        flash('Coupon status updated.', 'success')
-    except Exception as e:
-        logger.error(f"Error toggling coupon: {e}")
-        flash('Error updating coupon status.', 'error')
-    finally:
-        cur.close()
-        conn.close()
-        
-    return redirect(url_for('admin_coupons'))
-
-@app.route('/admin/coupons/delete/<int:coupon_id>', methods=['POST'])
-@login_required
-def delete_coupon(coupon_id):
-    if current_user.role != 'admin':
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
-        
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute('DELETE FROM coupons WHERE id = %s', (coupon_id,))
-        conn.commit()
-        flash('Coupon deleted permanently.', 'success')
-    except Exception as e:
-        logger.error(f"Error deleting coupon: {e}")
-        flash('Error deleting coupon.', 'error')
-    finally:
-        cur.close()
-        conn.close()
-        
-    return redirect(url_for('admin_coupons'))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render

@@ -138,16 +138,7 @@
       <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}">
     </div>
     <div class="product-info">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <h1 class="product-title" style="margin-bottom: 0;">{{ product[1] }}</h1>
-        <button class="wishlist-btn" onclick="toggleWishlist(this, {{ product[0] }})"
-          style="background: none; border: none; cursor: pointer; padding: 0; transition: transform 0.2s;"
-          title="Add to Wishlist">
-          <i class="{{ 'fas' if current_user.is_authenticated and product[0] in wishlist_ids else 'far' }} fa-heart"
-            style="color: #ef4444; font-size: 1.8rem;"></i>
-        </button>
-      </div>
-
+      <h1 class="product-title">{{ product[1] }}</h1>
       <div class="product-price">{{ product[2] | zar }}</div>
 
       {% if current_user.is_admin %}
@@ -176,12 +167,15 @@
 
       <p class="description">{{ product[3] }}</p>
 
-      <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="product-actions" {% if
-        product[5] <=0 %}style="opacity: 0.6;" {% endif %}>
+      <form method="POST" action="{{ url_for('add_to_cart', product_id=product[0]) }}" class="product-actions">
         <input type="number" id="quantity" name="quantity" class="form-control quantity-input" value="1" min="1"
-          max="{{ product[5] if product[5] else 10 }}" {% if product[5] <=0 %}disabled{% endif %}>
-        <button type="submit" class="btn btn-primary" style="flex: 1;" {% if product[5] <=0 %}disabled{% endif %}>
-          <i class="fas fa-cart-plus"></i> {% if product[5] <= 0 %}Sold Out{% else %}Add to Cart{% endif %} </button>
+          max="{{ product[5] if product[5] else 10 }}">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-cart-plus"></i> Add to Cart
+        </button>
+        <button type="button" class="btn btn-success">
+          <i class="fas fa-heart"></i> Wishlist
+        </button>
       </form>
     </div>
   </div>
