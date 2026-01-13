@@ -15,7 +15,7 @@
         <div class="product-card">
             <!-- Reuse standard product card structure -->
             <div style="position: relative;">
-                <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}" class="product-image">
+                <img src="{{ product[3] | resolve_image }}" alt="{{ product[1] }}" class="product-image">
                 <button class="wishlist-btn active" onclick="toggleWishlist(this, {{ product[0] }})"
                     style="position: absolute; top: 15px; right: 15px; background: white; border: none; border-radius: 50%; width: 35px; height: 35px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); cursor: pointer;">
                     <i class="fas fa-heart" style="color: #ef4444;"></i>
