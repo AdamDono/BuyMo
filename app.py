@@ -2141,7 +2141,7 @@ def wishlist():
 @app.route('/wishlist/toggle/<int:product_id>', methods=['POST'])
 @login_required
 def toggle_wishlist(product_id):
-    success, added, message = database.toggle_wishlist_item(current_user.id, product_id)
+    success, added, message = database.toggle_wishlist_item(int(current_user.id), product_id)
     if success:
         return jsonify({'status': 'success', 'added': added, 'message': message})
     return jsonify({'status': 'error', 'message': message}), 500

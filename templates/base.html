@@ -106,10 +106,24 @@
                         icon.classList.remove('fas');
                         icon.classList.add('far');
                     }
+                } else {
+                    // Revert on server error
+                    showToast(data.message || 'Error updating wishlist', 'error');
+                    if (icon.classList.contains('fas')) {
+                        icon.classList.replace('fas', 'far');
+                    } else {
+                        icon.classList.replace('far', 'fas');
+                    }
                 }
             } catch (error) {
                 console.error('Wishlist error:', error);
                 showToast('Something went wrong', 'error');
+                // Revert on implementation error
+                if (icon.classList.contains('fas')) {
+                    icon.classList.replace('fas', 'far');
+                } else {
+                    icon.classList.replace('far', 'fas');
+                }
             }
         }    </script>
     {% block extra_js %}{% endblock %}

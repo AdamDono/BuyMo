@@ -7,31 +7,31 @@ from urllib.parse import urlparse
 # Global connection pool
 _db_pool = None
 
+def _configure_db_url():
+    db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    
+    # Crucial for Render/Aiven/Neon cloud databases: enforce SSL
+    if 'localhost' not in db_url and '127.0.0.1' not in db_url:
+        if 'sslmode' not in db_url:
+            separator = '&' if '?' in db_url else '?'
+            db_url += f"{separator}sslmode=require"
+    return db_url
+
 def init_pool():
     global _db_pool
     if _db_pool is None:
-        db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:Fliph106@localhost:5433/ecom_db')
-        
-        # Ensure we use postgresql:// for psycopg2
-        if db_url.startswith('postgres://'):
-            db_url = db_url.replace('postgres://', 'postgresql://', 1)
-        
-        # Crucial for Render/Aiven/Neon cloud databases: enforce SSL
-        if 'localhost' not in db_url and '127.0.0.1' not in db_url:
-            if 'sslmode' not in db_url:
-                separator = '&' if '?' in db_url else '?'
-                db_url += f"{separator}sslmode=require"
-        
+        db_url = _configure_db_url()
         try:
             _db_pool = pool.ThreadedConnectionPool(
                 minconn=1,
-                maxconn=20, # Higher for concurrency
+                maxconn=20, 
                 dsn=db_url
             )
             print("Database connection pool initialized successfully.")
         except Exception as e:
             print(f"Error initializing connection pool: {e}")
-            # Fallback will be direct connection in get_db_connection
 
 def get_db_connection():
     global _db_pool
@@ -45,7 +45,7 @@ def get_db_connection():
             print(f"Error getting connection from pool: {e}")
     
     # Absolute fallback to direct connection
-    db_url = os.getenv('DATABASE_URL')
+    db_url = _configure_db_url()
     return psycopg2.connect(db_url)
 
 def return_db_connection(conn):
