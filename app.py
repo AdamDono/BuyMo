@@ -100,8 +100,13 @@ def format_zar(amount):
 def resolve_image(image_path):
     if not image_path:
         return url_for('static', filename='uploads/default-product.png')
-    if image_path.startswith('http') or image_path.startswith('https'):
+    
+    if image_path.startswith('http'):
+        # If it's a Cloudinary URL, inject optimization parameters
+        if 'cloudinary.com' in image_path and '/upload/' in image_path:
+            return image_path.replace('/upload/', '/upload/f_auto,q_auto/')
         return image_path
+        
     return url_for('static', filename=image_path)
 
 # Configure upload folder and allowed extensions
@@ -109,6 +114,32 @@ app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['UPLOAD_FOLDER_PROFILES'] = 'static/uploads/profiles'
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB
+
+# Simple In-Memory Cache for critical routes
+import time
+class SimpleCache:
+    def __init__(self):
+        self._cache = {}
+    
+    def set(self, key, value, timeout=300):
+        self._cache[key] = {
+            'value': value,
+            'expires': time.time() + timeout
+        }
+    
+    def get(self, key):
+        if key in self._cache:
+            entry = self._cache[key]
+            if time.time() < entry['expires']:
+                return entry['value']
+            else:
+                del self._cache[key]
+        return None
+
+    def clear(self):
+        self._cache = {}
+
+data_cache = SimpleCache()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -349,55 +380,82 @@ def inject_cart_count():
 def index():
     """Landing page with featured products and categories"""
     try:
-        conn = database.get_db_connection()
-        cur = conn.cursor()
+        # Check cache first for common data
+        cache_data = data_cache.get('landing_data')
         
-        # Get wishlist ids if logged in
+        if cache_data:
+            featured_products = cache_data['featured_products']
+            categories = cache_data['categories']
+            total_products = cache_data['total_products']
+            total_orders = cache_data['total_orders']
+            total_customers = cache_data['total_customers']
+            avg_ratings = cache_data['avg_ratings']
+            review_counts = cache_data['review_counts']
+        else:
+            conn = database.get_db_connection()
+            cur = conn.cursor()
+            
+            # 1. Get featured products + ratings in one query
+            cur.execute('''
+                SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
+                       COALESCE(r.avg_rating, 0), COALESCE(r.review_count, 0)
+                FROM products p
+                JOIN categories c ON p.category_id = c.id
+                LEFT JOIN (
+                    SELECT product_id, AVG(rating) as avg_rating, COUNT(*) as review_count
+                    FROM reviews
+                    GROUP BY product_id
+                ) r ON p.id = r.product_id
+                ORDER BY p.id DESC
+                LIMIT 8
+            ''')
+            raw_featured = cur.fetchall()
+            
+            featured_products = []
+            avg_ratings = {}
+            review_counts = {}
+            for p in raw_featured:
+                featured_products.append(p[:7])
+                avg_ratings[p[0]] = round(float(p[7]), 1)
+                review_counts[p[0]] = p[8]
+            
+            # 2. Get all categories
+            cur.execute('SELECT * FROM categories ORDER BY name')
+            categories = cur.fetchall()
+            
+            # 3. Get all stats
+            cur.execute('''
+                SELECT 
+                    (SELECT COUNT(*) FROM products) as total_products,
+                    (SELECT COUNT(*) FROM orders) as total_orders,
+                    (SELECT COUNT(*) FROM users) as total_customers
+            ''')
+            stats = cur.fetchone()
+            total_products, total_orders, total_customers = stats if stats else (0, 0, 0)
+            
+            # Save to cache
+            data_cache.set('landing_data', {
+                'featured_products': featured_products,
+                'categories': categories,
+                'total_products': total_products,
+                'total_orders': total_orders,
+                'total_customers': total_customers,
+                'avg_ratings': avg_ratings,
+                'review_counts': review_counts
+            }, timeout=300) # 5 minutes
+
+            cur.close()
+            database.return_db_connection(conn)
+
+        # Always get user-specific data fresh
         wishlist_ids = []
         if current_user.is_authenticated:
+            conn = database.get_db_connection()
+            cur = conn.cursor()
             cur.execute('SELECT product_id FROM wishlist WHERE user_id = %s', (current_user.id,))
             wishlist_ids = [row[0] for row in cur.fetchall()]
-
-        # 1. Get featured products + ratings in one query
-        cur.execute('''
-            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
-                   COALESCE(r.avg_rating, 0), COALESCE(r.review_count, 0)
-            FROM products p
-            JOIN categories c ON p.category_id = c.id
-            LEFT JOIN (
-                SELECT product_id, AVG(rating) as avg_rating, COUNT(*) as review_count
-                FROM reviews
-                GROUP BY product_id
-            ) r ON p.id = r.product_id
-            ORDER BY p.id DESC
-            LIMIT 8
-        ''')
-        raw_featured = cur.fetchall()
-        
-        featured_products = []
-        avg_ratings = {}
-        review_counts = {}
-        for p in raw_featured:
-            featured_products.append(p[:7])
-            avg_ratings[p[0]] = round(float(p[7]), 1)
-            review_counts[p[0]] = p[8]
-        
-        # 2. Get all categories
-        cur.execute('SELECT * FROM categories ORDER BY name')
-        categories = cur.fetchall()
-        
-        # 3. Get all stats in one consolidated query (Optimized)
-        cur.execute('''
-            SELECT 
-                (SELECT COUNT(*) FROM products) as total_products,
-                (SELECT COUNT(*) FROM orders) as total_orders,
-                (SELECT COUNT(*) FROM users) as total_customers
-        ''')
-        stats = cur.fetchone()
-        total_products, total_orders, total_customers = stats if stats else (0, 0, 0)
-        
-        cur.close()
-        database.return_db_connection(conn)
+            cur.close()
+            database.return_db_connection(conn)
         
         return render_template('landing.html', 
                              featured_products=featured_products,
@@ -410,7 +468,6 @@ def index():
                              wishlist_ids=wishlist_ids)
     except Exception as e:
         logger.error(f"Critical error in landing page: {str(e)}")
-        # Fallback: redirect to signup if landing page fails
         return redirect(url_for('signup'))
 
 @app.route('/get-started')
@@ -517,72 +574,91 @@ def logout():
 @app.route('/home')
 @login_required
 def home():
-    if not current_user.is_authenticated:
-        return redirect(url_for('login'))
-
-    conn = database.get_db_connection()
-    cur = conn.cursor()
-
     search_query = request.args.get('query', '').strip()
     category_filter = request.args.get('category', '').strip()
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', "").strip()
 
-    # Get wishlist ids for current user
+    # Generate a cache key based on search parameters
+    cache_key = f"home_data_{search_query}_{category_filter}_{min_price}_{max_price}"
+    cache_data = data_cache.get(cache_key)
+
+    if cache_data:
+        products = cache_data['products']
+        categories = cache_data['categories']
+        avg_ratings = cache_data['avg_ratings']
+        review_counts = cache_data['review_counts']
+    else:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+
+        # Base query with ratings integrated via JOIN for better performance
+        query = '''
+            SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
+                   COALESCE(r.avg_rating, 0) as avg_rating, COALESCE(r.review_count, 0) as review_count
+            FROM products p
+            JOIN categories c ON p.category_id = c.id
+            LEFT JOIN (
+                SELECT product_id, AVG(rating) as avg_rating, COUNT(*) as review_count
+                FROM reviews
+                GROUP BY product_id
+            ) r ON p.id = r.product_id
+            WHERE 1=1
+        '''
+        
+        # Check for is_active column dynamically
+        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='products' AND column_name='is_active'")
+        if cur.fetchone():
+            query += " AND COALESCE(p.is_active, true) = true"
+
+        params = []
+        if search_query:
+            query += " AND p.name ILIKE %s"
+            params.append(f"%{search_query}%")
+        if category_filter:
+            query += " AND c.name = %s"
+            params.append(category_filter)
+        if min_price:
+            query += " AND p.price >= %s"
+            params.append(float(min_price))
+        if max_price:
+            query += " AND p.price <= %s"
+            params.append(float(max_price))
+
+        cur.execute(query, params)
+        raw_products = cur.fetchall()
+        
+        products = []
+        avg_ratings = {}
+        review_counts = {}
+        for p in raw_products:
+            products.append(p[:7])
+            avg_ratings[p[0]] = round(float(p[7]), 1)
+            review_counts[p[0]] = p[8]
+
+        cur.execute('SELECT * FROM categories ORDER BY name;')
+        categories = cur.fetchall()
+        
+        # Save to cache
+        data_cache.set(cache_key, {
+            'products': products,
+            'categories': categories,
+            'avg_ratings': avg_ratings,
+            'review_counts': review_counts
+        }, timeout=300)
+
+        cur.close()
+        database.return_db_connection(conn)
+
+    # Always get wishlist fresh
     wishlist_ids = []
     if current_user.is_authenticated:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
         cur.execute('SELECT product_id FROM wishlist WHERE user_id = %s', (current_user.id,))
         wishlist_ids = [row[0] for row in cur.fetchall()]
-
-    # Base query with ratings integrated via JOIN for better performance
-    query = '''
-        SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
-               COALESCE(r.avg_rating, 0) as avg_rating, COALESCE(r.review_count, 0) as review_count
-        FROM products p
-        JOIN categories c ON p.category_id = c.id
-        LEFT JOIN (
-            SELECT product_id, AVG(rating) as avg_rating, COUNT(*) as review_count
-            FROM reviews
-            GROUP BY product_id
-        ) r ON p.id = r.product_id
-        WHERE 1=1
-    '''
-    
-    # Check for is_active column dynamically to avoid crashes
-    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='products' AND column_name='is_active'")
-    if cur.fetchone():
-        query += " AND COALESCE(p.is_active, true) = true"
-
-    params = []
-    if search_query:
-        query += " AND p.name ILIKE %s"
-        params.append(f"%{search_query}%")
-    if category_filter:
-        query += " AND c.name = %s"
-        params.append(category_filter)
-    if min_price:
-        query += " AND p.price >= %s"
-        params.append(float(min_price))
-    if max_price:
-        query += " AND p.price <= %s"
-        params.append(float(max_price))
-
-    cur.execute(query, params)
-    raw_products = cur.fetchall()
-    
-    products = []
-    avg_ratings = {}
-    review_counts = {}
-    for p in raw_products:
-        products.append(p[:7])
-        avg_ratings[p[0]] = round(float(p[7]), 1)
-        review_counts[p[0]] = p[8]
-
-    cur.execute('SELECT * FROM categories ORDER BY name;')
-    categories = cur.fetchall()
-
-    cur.close()
-    conn.close()
+        cur.close()
+        database.return_db_connection(conn)
 
     return render_template('home.html', products=products, categories=categories, 
                          search_query=search_query, category_filter=category_filter, 
@@ -745,6 +821,7 @@ def add_product():
             ''', (name, float(price), description, image_url, int(category_id), quantity, quantity))
             new_product_id = cur.fetchone()[0]
             conn.commit()
+            data_cache.clear() # Cache invalidation
             flash('Product added successfully!', 'success')
             return redirect(url_for('product', product_id=new_product_id))
         except Exception as e:
@@ -1297,6 +1374,7 @@ def edit_product(product_id):
             ''', (name, price, description, image_url, category_id, remaining_quantity, product_id))
             
             conn.commit()
+            data_cache.clear() # Cache invalidation
             flash('Product updated successfully!', 'success')
             return redirect(url_for('product', product_id=product_id))
         
@@ -1344,6 +1422,7 @@ def delete_product(product_id):
                 cur.execute("DELETE FROM reviews WHERE product_id = %s", (product_id,))
                 cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
                 conn.commit()
+                data_cache.clear() # Cache invalidation
                 flash('Product deleted successfully!', 'success')
             
     except Exception as e:
