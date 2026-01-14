@@ -1133,6 +1133,7 @@ def checkout():
 
 @app.route('/payfast/return', methods=['GET'])
 def payfast_return():
+    user_id = request.args.get('custom_int1')
     if user_id:
         try:
             try:
