@@ -1133,10 +1133,18 @@ def checkout():
 
 @app.route('/payfast/return', methods=['GET'])
 def payfast_return():
-    user_id = request.args.get('custom_int1')
     if user_id:
         try:
-            user_data = database.get_user_by_id(int(user_id))
+            try:
+                user_data = database.get_user_by_id(int(user_id))
+            except Exception as db_err:
+                logger.error(f"DB Error in payfast_return: {db_err}")
+                # Force reconnect
+                conn = database.get_db_connection()
+                if hasattr(conn, 'closed') and conn.closed:
+                     database.init_pool()
+                user_data = database.get_user_by_id(int(user_id))
+
             if user_data:
                 user = User(id=user_data[0], username=user_data[1], email=user_data[2], is_admin=user_data[4])
                 login_user(user, remember=True, force=True)
