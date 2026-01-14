@@ -1779,7 +1779,7 @@ def orders():
         conn = database.get_db_connection()
         cur = conn.cursor()
         
-        # 1. Fetch orders with all details
+        # 1. Fetch orders with all details explicitly
         cur.execute('''
             SELECT id, total_amount, status, order_date, tracking_number,
                    delivery_method, full_name, phone, street_address, suburb,
@@ -1814,20 +1814,34 @@ def orders():
                     'price_at_purchase': float(item[4])
                 })
 
-        # 3. Build history objects
+        # 3. Build history objects using manual dict creation to avoid attribute errors
+        # This completely bypasses the 'dict object has no attribute' error because we define the dict keys explicitly here.
         order_history = []
         for order in orders_data:
             order_id = order[0]
+            # Handle potential None for order_date [3]
+            order_date_str = 'N/A'
+            if order[3]:
+                try:
+                   order_date_str = order[3].strftime('%Y-%m-%d %H:%M')
+                except:
+                   order_date_str = str(order[3])
+
             order_history.append({
                 'id': order_id,
                 'total_amount': float(order[1]),
                 'status': order[2],
-                'date': order[3].strftime('%Y-%m-%d %H:%M') if order[3] else 'N/A',
+                'order_date': order[3], # Keep raw object for template filters if needed, or string
+                'date': order_date_str, # used in some views?
                 'tracking_number': order[4],
                 'delivery_method': order[5],
                 'full_name': order[6],
                 'phone': order[7],
-                'address': f"{order[8]}, {order[9]}, {order[10]}, {order[11]} {order[12]}".strip(', '),
+                'street_address': order[8],
+                'suburb': order[9],
+                'city': order[10],
+                'province': order[11],
+                'postal_code': order[12],
                 'delivery_fee': float(order[13]) if order[13] else 0,
                 'pickup_date': order[14],
                 'driver_name': order[15],
@@ -2492,3 +2506,24 @@ def admin_test_email():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)  # Ensure port is set to 5000 for Render
+@app.route('/admin/toggle-coupon/<int:coupon_id>', methods=['POST'])
+@login_required
+def toggle_coupon(coupon_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('home'))
+        
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute('UPDATE coupons SET active = NOT active WHERE id = %s', (coupon_id,))
+        conn.commit()
+        flash('Coupon status updated.', 'success')
+    except Exception as e:
+        logger.error(f"Error toggling coupon: {e}")
+        flash('Error updating coupon.', 'error')
+    finally:
+        cur.close()
+        database.return_db_connection(conn)
+    return redirect(url_for('admin_coupons'))
+

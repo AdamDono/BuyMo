@@ -26,7 +26,7 @@ def init_pool():
         try:
             _db_pool = pool.ThreadedConnectionPool(
                 minconn=1,
-                maxconn=20, 
+                maxconn=50, 
                 dsn=db_url
             )
             print("Database connection pool initialized successfully.")
