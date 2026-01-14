@@ -1748,7 +1748,7 @@ def orders():
                 'id': order_id,
                 'total_amount': float(order[1]),
                 'status': order[2],
-                'date': order[3].strftime('%Y-%m-%d %H:%M'),
+                'date': order[3].strftime('%Y-%m-%d %H:%M') if order[3] else 'N/A',
                 'tracking_number': order[4],
                 'delivery_method': order[5],
                 'full_name': order[6],

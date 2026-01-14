@@ -370,12 +370,35 @@ def get_user_details(user_id):
 
 def get_user_by_id(user_id):
     conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('SELECT * FROM users WHERE id = %s', (user_id,))
-    user = cur.fetchone()
-    cur.close()
-    return_db_connection(conn)
-    return user
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM users WHERE id = %s', (user_id,))
+        user = cur.fetchone()
+        cur.close()
+        return_db_connection(conn)
+        return user
+    except psycopg2.OperationalError:
+        # Connection might be dead, try once more with fresh connection
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        global _db_pool
+        if _db_pool:
+            try:
+                _db_pool.closeall()
+            except:
+                pass
+            _db_pool = None # Force re-init
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM users WHERE id = %s', (user_id,))
+        user = cur.fetchone()
+        cur.close()
+        return_db_connection(conn)
+        return user
 
 def update_user_profile(user_id, username, email, profile_image=None):
     conn = get_db_connection()
