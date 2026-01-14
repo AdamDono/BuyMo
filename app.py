@@ -915,7 +915,7 @@ def add_to_cart(product_id):
         cur.close()
         database.return_db_connection(conn)
 
-    return redirect(url_for('cart'))
+    return redirect(url_for('home'))
 
 @app.route('/api/cart-count')
 @login_required
