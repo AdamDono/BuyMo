@@ -1172,13 +1172,30 @@ def payfast_return():
                                 delivery_info = json.loads(pending_order[3]) if pending_order[3] else {}
                                 tracking_number = generate_tracking_number()
 
+                                # Use same column structure as production PayFast notify route
                                 cur.execute('''
-                                    INSERT INTO orders (user_id, total_amount, status, tracking_link, shipping_address, city, province, postal_code, delivery_fee)
-                                    VALUES (%s, %s, 'processing', %s, %s, %s, %s, %s, %s)
+                                    INSERT INTO orders (
+                                        user_id, tracking_number, total_amount, delivery_method, full_name, phone,
+                                        street_address, suburb, city, province, postal_code,
+                                        delivery_fee, pickup_date, status
+                                    )
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'processing')
                                     RETURNING id
-                                ''', (user.id, total_amount, tracking_number, 
-                                      delivery_info.get('address'), delivery_info.get('city'), 
-                                      delivery_info.get('province'), delivery_info.get('postal_code'), 50.00))
+                                ''', (
+                                    user.id,
+                                    tracking_number,
+                                    total_amount,
+                                    delivery_info.get('delivery_method', 'delivery'),
+                                    delivery_info.get('full_name', user.username),
+                                    delivery_info.get('phone', ''),
+                                    delivery_info.get('street_address', ''),
+                                    delivery_info.get('suburb', ''),
+                                    delivery_info.get('city', ''),
+                                    delivery_info.get('province', ''),
+                                    delivery_info.get('postal_code', ''),
+                                    delivery_info.get('delivery_fee', 50.00),
+                                    delivery_info.get('pickup_date')
+                                ))
                                 order_id = cur.fetchone()[0]
 
                                 for item in cart_items:
@@ -1224,17 +1241,43 @@ def payfast_return():
 
 @app.route('/payfast/notify', methods=['POST'])
 def payfast_notify():
+    """
+    PayFast ITN handler - MUST respond within 10 seconds to avoid 502 errors
+    We respond immediately, then process the order in background
+    """
+    logger.info("=" * 60)
     logger.info("PayFast ITN received")
-
-    if request.form.get('payment_status') == 'COMPLETE':
-        pending_order_id = request.form.get('m_payment_id')
-        user_id = int(request.form.get('custom_int1'))
-
-        # Retry logic for robust DB handling
+    logger.info(f"Payment Status: {request.form.get('payment_status')}")
+    logger.info(f"Pending Order ID: {request.form.get('m_payment_id')}")
+    logger.info(f"User ID: {request.form.get('custom_int1')}")
+    logger.info("=" * 60)
+    
+    # Quick validation
+    if request.form.get('payment_status') != 'COMPLETE':
+        logger.warning(f"Payment not complete: {request.form.get('payment_status')}")
+        return "Payment not complete", 200
+    
+    pending_order_id = request.form.get('m_payment_id')
+    user_id_str = request.form.get('custom_int1')
+    
+    if not pending_order_id or not user_id_str:
+        logger.error("Missing required fields")
+        return "Missing fields", 400
+    
+    try:
+        user_id = int(user_id_str)
+    except ValueError:
+        logger.error(f"Invalid user_id: {user_id_str}")
+        return "Invalid user_id", 400
+    
+    # Process order in background thread to respond quickly
+    def process_order_background():
+        """Background processing to avoid PayFast timeout"""
         max_retries = 2
         for attempt in range(max_retries):
             conn = None
             try:
+                logger.info(f"[Background] Processing order attempt {attempt + 1}")
                 conn = database.get_db_connection()
                 cur = conn.cursor()
 
@@ -1246,36 +1289,33 @@ def payfast_notify():
                 pending_order = cur.fetchone()
 
                 if not pending_order:
-                    # Might have been processed already (idempotency check)
-                    logger.warning("Pending order not found (possibly already processed)")
+                    logger.warning("[Background] Pending order not found (possibly already processed)")
                     database.return_db_connection(conn)
-                    return "OK", 200 # Acknowledge to stop PayFast retrying if it's done
+                    return
 
                 if pending_order[0] != user_id:
-                     logger.warning("Invalid order or user mismatch")
-                     database.return_db_connection(conn)
-                     return "Invalid order", 400
+                    logger.warning("[Background] Invalid order or user mismatch")
+                    database.return_db_connection(conn)
+                    return
 
                 total_amount = pending_order[1]
                 cart_items = json.loads(pending_order[2])
                 delivery_info = json.loads(pending_order[3]) if pending_order[3] else {}
 
+                # Stock validation
                 for item in cart_items:
-                    cur.execute('''
-                        SELECT remaining_quantity
-                        FROM products
-                        WHERE id = %s
-                    ''', (item['product_id'],))
+                    cur.execute('SELECT remaining_quantity FROM products WHERE id = %s', (item['product_id'],))
                     res = cur.fetchone()
                     remaining = res[0] if res else 0
                     if remaining < item['quantity']:
-                        logger.warning(f"Not enough stock for product {item['product_id']}")
+                        logger.warning(f"[Background] Not enough stock for product {item['product_id']}")
                         database.return_db_connection(conn)
-                        return "Stock unavailable", 400
+                        return
 
-                # Generate unique tracking number
+                # Generate tracking number
                 tracking_number = generate_tracking_number()
                 
+                # Create order
                 cur.execute('''
                     INSERT INTO orders (
                         user_id, tracking_number, total_amount, delivery_method, full_name, phone,
@@ -1285,9 +1325,7 @@ def payfast_notify():
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'processing')
                     RETURNING id
                 ''', (
-                    user_id,
-                    tracking_number,
-                    total_amount,
+                    user_id, tracking_number, total_amount,
                     delivery_info.get('delivery_method', 'delivery'),
                     delivery_info.get('full_name'),
                     delivery_info.get('phone'),
@@ -1300,13 +1338,16 @@ def payfast_notify():
                     delivery_info.get('pickup_date')
                 ))
                 order_id = cur.fetchone()[0]
+                logger.info(f"[Background] Created order #{order_id}")
 
+                # Add order items
                 for item in cart_items:
                     cur.execute('''
                         INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
                         VALUES (%s, %s, %s, %s)
                     ''', (order_id, item['product_id'], item['quantity'], item['price']))
 
+                # Update stock
                 for item in cart_items:
                     cur.execute('''
                         UPDATE products 
@@ -1314,17 +1355,12 @@ def payfast_notify():
                         WHERE id = %s
                     ''', (item['quantity'], item['product_id']))
 
-                cur.execute('''
-                    DELETE FROM cart_items 
-                    WHERE user_id = %s
-                ''', (user_id,))
-
-                cur.execute('''
-                    DELETE FROM pending_orders
-                    WHERE id = %s
-                ''', (pending_order_id,))
+                # Clear cart and pending order
+                cur.execute('DELETE FROM cart_items WHERE user_id = %s', (user_id,))
+                cur.execute('DELETE FROM pending_orders WHERE id = %s', (pending_order_id,))
 
                 conn.commit()
+                logger.info(f"[Background] Order #{order_id} committed successfully")
                 
                 # Check for low stock after transaction is committed
                 try:
@@ -1334,11 +1370,9 @@ def payfast_notify():
                         if prod_data and prod_data[1] <= 5:
                             send_inventory_alert(prod_data[0], prod_data[1])
                 except Exception as e:
-                    logger.error(f"Error checking stock alerts: {e}")
-                        
-                logger.info("Order completed successfully")
+                    logger.error(f"[Background] Error checking stock alerts: {e}")
 
-                # Send confirmation email
+                # Send email
                 try:
                     user_data = database.get_user_by_id(user_id)
                     if user_data:
@@ -1350,28 +1384,41 @@ def payfast_notify():
                             'delivery_method': delivery_info.get('delivery_method', 'delivery'),
                             'items_count': len(cart_items)
                         }
-                        send_order_email(user_data[2], email_details)
+                        logger.info(f"[Background] Sending email to {user_data[2]}")
+                        email_sent = send_order_email(user_data[2], email_details)
+                        if email_sent:
+                            logger.info(f"[Background] ✓ Email queued for {user_data[2]}")
+                        else:
+                            logger.error(f"[Background] ✗ Email failed for {user_data[2]}")
                 except Exception as email_err:
-                    logger.error(f"Error preparing order email: {str(email_err)}")
+                    logger.error(f"[Background] Email error: {str(email_err)}")
                 
-                # Success - Exit loop and function
                 database.return_db_connection(conn)
-                return "OK", 200
+                logger.info("[Background] Processing complete!")
+                return
 
             except Exception as e:
-                logger.error(f"Error processing ITN (Attempt {attempt+1}): {str(e)}")
+                logger.error(f"[Background] Error (Attempt {attempt+1}): {str(e)}")
                 if conn:
                     conn.rollback()
                     database.return_db_connection(conn)
                 
-                # If it's a DB error, force pool reset and retry
                 if attempt < max_retries - 1:
-                    logger.info("Resetting DB pool and retrying...")
+                    logger.info("[Background] Retrying...")
                     database.close_pool()
                     continue
                 
-                return "Error", 500
-
+                logger.error("[Background] All retries failed")
+                return
+    
+    # Start background thread
+    from threading import Thread
+    thread = Thread(target=process_order_background)
+    thread.daemon = True
+    thread.start()
+    
+    # Respond IMMEDIATELY to PayFast (within 1 second)
+    logger.info("Responding OK to PayFast immediately")
     return "OK", 200
 
 @app.route('/remove-from-cart/<int:item_id>', methods=['POST'])
@@ -2266,10 +2313,32 @@ def admin_dashboard():
     total_revenue = cur.fetchone()[0] or 0
     
     cur.execute('SELECT COUNT(*) FROM users')
-    total_users = cur.fetchone()[0]
+    total_customers = cur.fetchone()[0]  # Renamed to match template
+    
+    # Get low stock count (products with remaining_quantity <= 5)
+    cur.execute('SELECT COUNT(*) FROM products WHERE remaining_quantity <= 5')
+    low_stock_count = cur.fetchone()[0]
     
     cur.execute('SELECT id, total_amount, status, order_date FROM orders ORDER BY order_date DESC LIMIT 5')
     recent_orders = cur.fetchall()
+    
+    # Get sales data for last 7 days for chart
+    from datetime import date, timedelta
+    chart_labels = []
+    chart_values = []
+    
+    for i in range(6, -1, -1):  # Last 7 days
+        day = date.today() - timedelta(days=i)
+        chart_labels.append(day.strftime('%a'))  # Mon, Tue, etc.
+        
+        # Get total sales for that day
+        cur.execute('''
+            SELECT COALESCE(SUM(total_amount), 0) 
+            FROM orders 
+            WHERE DATE(order_date) = %s AND status != 'cancelled'
+        ''', (day,))
+        daily_total = float(cur.fetchone()[0] or 0)
+        chart_values.append(daily_total)
     
     cur.close()
     conn.close()
@@ -2277,7 +2346,10 @@ def admin_dashboard():
     return render_template('admin_dashboard.html', 
                          total_orders=total_orders, 
                          total_revenue=total_revenue, 
-                         total_users=total_users,
+                         total_customers=total_customers,
+                         low_stock_count=low_stock_count,
+                         chart_labels=chart_labels,
+                         chart_values=chart_values,
                          recent_orders=recent_orders)
 
 @app.route('/wishlist')
@@ -2384,6 +2456,15 @@ def add_coupon():
         cur.close()
         database.return_db_connection(conn)
     return redirect(url_for('admin_coupons'))
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint to keep Render app awake and verify it's running"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'service': 'BuyMo'
+    }), 200
 
 @app.route('/admin/test-email')
 @login_required
