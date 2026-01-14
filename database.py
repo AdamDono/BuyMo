@@ -181,6 +181,7 @@ def create_tables():
             user_id INTEGER NOT NULL,
             total_amount DECIMAL(10, 2) NOT NULL,
             cart_items_json TEXT NOT NULL,
+            delivery_info_json TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
         );
@@ -218,6 +219,16 @@ def create_tables():
         );
     ''')
     
+    # Add extra columns if they don't exist
+    cur.execute('''
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pending_orders' AND column_name='delivery_info_json') THEN
+                ALTER TABLE pending_orders ADD COLUMN delivery_info_json TEXT;
+            END IF;
+        END $$;
+    ''')
+
     # Add extra columns if they don't exist
     cur.execute('''
         DO $$ 
