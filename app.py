@@ -1247,10 +1247,6 @@ def payfast_notify():
     """
     logger.info("=" * 60)
     logger.info("PayFast ITN received")
-    logger.info(f"Payment Status: {request.form.get('payment_status')}")
-    logger.info(f"Pending Order ID: {request.form.get('m_payment_id')}")
-    logger.info(f"User ID: {request.form.get('custom_int1')}")
-    logger.info("=" * 60)
     
     # Quick validation
     if request.form.get('payment_status') != 'COMPLETE':
@@ -1270,150 +1266,157 @@ def payfast_notify():
         logger.error(f"Invalid user_id: {user_id_str}")
         return "Invalid user_id", 400
     
+    # Capture app for thread
+    app_ctx = app
+    
     # Process order in background thread to respond quickly
-    def process_order_background():
-        """Background processing to avoid PayFast timeout"""
-        max_retries = 2
-        for attempt in range(max_retries):
-            conn = None
-            try:
-                logger.info(f"[Background] Processing order attempt {attempt + 1}")
-                conn = database.get_db_connection()
-                cur = conn.cursor()
+    def process_order_background(app_instance, p_order_id, u_id):
+        """Background processing with robust error handling and logging"""
+        try:
+            # Use app context necessary for render_template (emails)
+            with app_instance.app_context():
+                
+                # Setup local file logging for debug
+                def file_log(msg):
+                    try:
+                        from datetime import datetime
+                        with open('itn_debug.log', 'a') as f:
+                            f.write(f"{datetime.now()} - {msg}\n")
+                        print(f"ITN: {msg}") # Also to stdout
+                    except: pass
+                
+                file_log(f"STARTING processing for Order {p_order_id} User {u_id}")
+                
+                max_retries = 2
+                for attempt in range(max_retries):
+                    conn = None
+                    try:
+                        file_log(f"Attempt {attempt + 1}")
+                        conn = database.get_db_connection()
+                        cur = conn.cursor()
 
-                cur.execute('''
-                    SELECT user_id, total_amount, cart_items_json, delivery_info_json
-                    FROM pending_orders
-                    WHERE id = %s
-                ''', (pending_order_id,))
-                pending_order = cur.fetchone()
+                        # 1. Get Pending Order
+                        cur.execute('''
+                            SELECT user_id, total_amount, cart_items_json, delivery_info_json
+                            FROM pending_orders
+                            WHERE id = %s
+                        ''', (p_order_id,))
+                        pending_order = cur.fetchone()
 
-                if not pending_order:
-                    logger.warning("[Background] Pending order not found (possibly already processed)")
-                    database.return_db_connection(conn)
-                    return
+                        if not pending_order:
+                            file_log("Pending order not found")
+                            database.return_db_connection(conn)
+                            return
 
-                if pending_order[0] != user_id:
-                    logger.warning("[Background] Invalid order or user mismatch")
-                    database.return_db_connection(conn)
-                    return
+                        if pending_order[0] != u_id:
+                            file_log(f"User mismatch: PO User {pending_order[0]} != {u_id}")
+                            database.return_db_connection(conn)
+                            return
 
-                total_amount = pending_order[1]
-                cart_items = json.loads(pending_order[2])
-                delivery_info = json.loads(pending_order[3]) if pending_order[3] else {}
+                        total_amount = pending_order[1]
+                        import json
+                        cart_items = json.loads(pending_order[2])
+                        # Handle potential missing/null delivery info
+                        delivery_info = {}
+                        if len(pending_order) > 3 and pending_order[3]:
+                            delivery_info = json.loads(pending_order[3])
 
-                # Stock validation
-                for item in cart_items:
-                    cur.execute('SELECT remaining_quantity FROM products WHERE id = %s', (item['product_id'],))
-                    res = cur.fetchone()
-                    remaining = res[0] if res else 0
-                    if remaining < item['quantity']:
-                        logger.warning(f"[Background] Not enough stock for product {item['product_id']}")
+                        # 2. Stock Validation
+                        for item in cart_items:
+                            cur.execute('SELECT remaining_quantity FROM products WHERE id = %s', (item['product_id'],))
+                            res = cur.fetchone()
+                            remaining = res[0] if res else 0
+                            if remaining < item['quantity']:
+                                file_log(f"Stock check failed for Product {item['product_id']}")
+                                database.return_db_connection(conn)
+                                return
+
+                        # 3. Create Order
+                        tracking_number = generate_tracking_number()
+                        
+                        cur.execute('''
+                            INSERT INTO orders (
+                                user_id, tracking_number, total_amount, delivery_method, full_name, phone,
+                                street_address, suburb, city, province, postal_code,
+                                delivery_fee, pickup_date, status
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'processing')
+                            RETURNING id
+                        ''', (
+                            u_id, tracking_number, total_amount,
+                            delivery_info.get('delivery_method', 'delivery'),
+                            delivery_info.get('full_name'),
+                            delivery_info.get('phone'),
+                            delivery_info.get('street_address'),
+                            delivery_info.get('suburb'),
+                            delivery_info.get('city'),
+                            delivery_info.get('province'),
+                            delivery_info.get('postal_code'),
+                            delivery_info.get('delivery_fee', 0),
+                            delivery_info.get('pickup_date')
+                        ))
+                        order_id = cur.fetchone()[0]
+                        file_log(f"Created Order #{order_id}")
+
+                        # 4. Add Items
+                        for item in cart_items:
+                            cur.execute('''
+                                INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
+                                VALUES (%s, %s, %s, %s)
+                            ''', (order_id, item['product_id'], item['quantity'], item['price']))
+
+                        # 5. Update Stock
+                        for item in cart_items:
+                            cur.execute('''
+                                UPDATE products 
+                                SET remaining_quantity = remaining_quantity - %s
+                                WHERE id = %s
+                            ''', (item['quantity'], item['product_id']))
+
+                        # 6. Clean Up
+                        cur.execute('DELETE FROM cart_items WHERE user_id = %s', (u_id,))
+                        cur.execute('DELETE FROM pending_orders WHERE id = %s', (p_order_id,))
+
+                        # 7. COMMIT
+                        conn.commit()
+                        file_log("COMMIT SUCCESSFUL")
+
+                        # 8. Send Email (After commit)
+                        try:
+                            user_data = database.get_user_by_id(u_id)
+                            if user_data:
+                                email_details = {
+                                    'order_id': order_id,
+                                    'tracking_number': tracking_number,
+                                    'total_amount': float(total_amount),
+                                    'full_name': delivery_info.get('full_name', user_data[1]),
+                                    'delivery_method': delivery_info.get('delivery_method', 'delivery'),
+                                    'items_count': len(cart_items)
+                                }
+                                file_log(f"Sending email to {user_data[2]}...")
+                                send_order_email(user_data[2], email_details)
+                                file_log("Email sent function called")
+                        except Exception as email_err:
+                            file_log(f"Email Error: {str(email_err)}")
+                        
                         database.return_db_connection(conn)
                         return
 
-                # Generate tracking number
-                tracking_number = generate_tracking_number()
-                
-                # Create order
-                cur.execute('''
-                    INSERT INTO orders (
-                        user_id, tracking_number, total_amount, delivery_method, full_name, phone,
-                        street_address, suburb, city, province, postal_code,
-                        delivery_fee, pickup_date, status
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'processing')
-                    RETURNING id
-                ''', (
-                    user_id, tracking_number, total_amount,
-                    delivery_info.get('delivery_method', 'delivery'),
-                    delivery_info.get('full_name'),
-                    delivery_info.get('phone'),
-                    delivery_info.get('street_address'),
-                    delivery_info.get('suburb'),
-                    delivery_info.get('city'),
-                    delivery_info.get('province'),
-                    delivery_info.get('postal_code'),
-                    delivery_info.get('delivery_fee', 0),
-                    delivery_info.get('pickup_date')
-                ))
-                order_id = cur.fetchone()[0]
-                logger.info(f"[Background] Created order #{order_id}")
+                    except Exception as e:
+                        file_log(f"DB Error Attempt {attempt}: {str(e)}")
+                        if conn:
+                            conn.rollback()
+                            database.return_db_connection(conn)
+                        
+                        if attempt < max_retries - 1:
+                            database.close_pool()
+                            continue
+        except Exception as outer_e:
+            print(f"CRITICAL BG THREAD ERROR: {str(outer_e)}")
 
-                # Add order items
-                for item in cart_items:
-                    cur.execute('''
-                        INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
-                        VALUES (%s, %s, %s, %s)
-                    ''', (order_id, item['product_id'], item['quantity'], item['price']))
-
-                # Update stock
-                for item in cart_items:
-                    cur.execute('''
-                        UPDATE products 
-                        SET remaining_quantity = remaining_quantity - %s
-                        WHERE id = %s
-                    ''', (item['quantity'], item['product_id']))
-
-                # Clear cart and pending order
-                cur.execute('DELETE FROM cart_items WHERE user_id = %s', (user_id,))
-                cur.execute('DELETE FROM pending_orders WHERE id = %s', (pending_order_id,))
-
-                conn.commit()
-                logger.info(f"[Background] Order #{order_id} committed successfully")
-                
-                # Check for low stock after transaction is committed
-                try:
-                    for item in cart_items:
-                        cur.execute('SELECT name, remaining_quantity FROM products WHERE id = %s', (item['product_id'],))
-                        prod_data = cur.fetchone()
-                        if prod_data and prod_data[1] <= 5:
-                            send_inventory_alert(prod_data[0], prod_data[1])
-                except Exception as e:
-                    logger.error(f"[Background] Error checking stock alerts: {e}")
-
-                # Send email
-                try:
-                    user_data = database.get_user_by_id(user_id)
-                    if user_data:
-                        email_details = {
-                            'order_id': order_id,
-                            'tracking_number': tracking_number,
-                            'total_amount': float(total_amount),
-                            'full_name': delivery_info.get('full_name', user_data[1]),
-                            'delivery_method': delivery_info.get('delivery_method', 'delivery'),
-                            'items_count': len(cart_items)
-                        }
-                        logger.info(f"[Background] Sending email to {user_data[2]}")
-                        email_sent = send_order_email(user_data[2], email_details)
-                        if email_sent:
-                            logger.info(f"[Background] ✓ Email queued for {user_data[2]}")
-                        else:
-                            logger.error(f"[Background] ✗ Email failed for {user_data[2]}")
-                except Exception as email_err:
-                    logger.error(f"[Background] Email error: {str(email_err)}")
-                
-                database.return_db_connection(conn)
-                logger.info("[Background] Processing complete!")
-                return
-
-            except Exception as e:
-                logger.error(f"[Background] Error (Attempt {attempt+1}): {str(e)}")
-                if conn:
-                    conn.rollback()
-                    database.return_db_connection(conn)
-                
-                if attempt < max_retries - 1:
-                    logger.info("[Background] Retrying...")
-                    database.close_pool()
-                    continue
-                
-                logger.error("[Background] All retries failed")
-                return
-    
     # Start background thread
     from threading import Thread
-    thread = Thread(target=process_order_background)
+    thread = Thread(target=process_order_background, args=(app_ctx, pending_order_id, user_id))
     thread.daemon = True
     thread.start()
     
