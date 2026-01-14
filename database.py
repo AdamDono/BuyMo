@@ -59,6 +59,17 @@ def return_db_connection(conn):
     elif conn:
         conn.close()
 
+def close_pool():
+    global _db_pool
+    if _db_pool:
+        try:
+            _db_pool.closeall()
+        except Exception as e:
+            print(f"Error closing pool: {e}")
+        finally:
+            _db_pool = None
+            print("Database pool closed and reset.")
+
 def create_user(username, email, password):
     conn = get_db_connection()
     cur = conn.cursor()

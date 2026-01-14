@@ -1230,123 +1230,147 @@ def payfast_notify():
         pending_order_id = request.form.get('m_payment_id')
         user_id = int(request.form.get('custom_int1'))
 
-        conn = database.get_db_connection()
-        try:
-            cur = conn.cursor()
-
-            cur.execute('''
-                SELECT user_id, total_amount, cart_items_json, delivery_info_json
-                FROM pending_orders
-                WHERE id = %s
-            ''', (pending_order_id,))
-            pending_order = cur.fetchone()
-
-            if not pending_order or pending_order[0] != user_id:
-                logger.warning("Invalid order or user mismatch")
-                return "Invalid order", 400
-
-            total_amount = pending_order[1]
-            cart_items = json.loads(pending_order[2])
-            delivery_info = json.loads(pending_order[3]) if pending_order[3] else {}
-
-            for item in cart_items:
-                cur.execute('''
-                    SELECT remaining_quantity
-                    FROM products
-                    WHERE id = %s
-                ''', (item['product_id'],))
-                remaining = cur.fetchone()[0]
-                if remaining < item['quantity']:
-                    logger.warning(f"Not enough stock for product {item['product_id']}")
-                    return "Stock unavailable", 400
-
-            # delivery_info already loaded from pending_orders table above
-            
-            # Generate unique tracking number
-            tracking_number = generate_tracking_number()
-            
-            cur.execute('''
-                INSERT INTO orders (
-                    user_id, tracking_number, total_amount, delivery_method, full_name, phone,
-                    street_address, suburb, city, province, postal_code,
-                    delivery_fee, pickup_date, status
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            ''', (
-                user_id,
-                tracking_number,
-                total_amount,
-                delivery_info.get('delivery_method', 'delivery'),
-                delivery_info.get('full_name'),
-                delivery_info.get('phone'),
-                delivery_info.get('street_address'),
-                delivery_info.get('suburb'),
-                delivery_info.get('city'),
-                delivery_info.get('province'),
-                delivery_info.get('postal_code'),
-                delivery_info.get('delivery_fee', 0),
-                delivery_info.get('pickup_date'),
-                'processing'
-            ))
-            order_id = cur.fetchone()[0]
-
-            for item in cart_items:
-                cur.execute('''
-                    INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
-                    VALUES (%s, %s, %s, %s)
-                ''', (order_id, item['product_id'], item['quantity'], item['price']))
-
-            for item in cart_items:
-                cur.execute('''
-                    UPDATE products 
-                    SET remaining_quantity = remaining_quantity - %s
-                    WHERE id = %s
-                ''', (item['quantity'], item['product_id']))
-
-            cur.execute('''
-                DELETE FROM cart_items 
-                WHERE user_id = %s
-            ''', (user_id,))
-
-            cur.execute('''
-                DELETE FROM pending_orders
-                WHERE id = %s
-            ''', (pending_order_id,))
-
-            conn.commit()
-            
-            # Check for low stock after transaction is committed
-            for item in cart_items:
-                cur.execute('SELECT name, remaining_quantity FROM products WHERE id = %s', (item['product_id'],))
-                prod_data = cur.fetchone()
-                if prod_data and prod_data[1] <= 5:
-                    send_inventory_alert(prod_data[0], prod_data[1])
-                    
-            logger.info("Order completed successfully")
-
-            # Send confirmation email
+        # Retry logic for robust DB handling
+        max_retries = 2
+        for attempt in range(max_retries):
+            conn = None
             try:
-                user_data = database.get_user_by_id(user_id)
-                if user_data:
-                    email_details = {
-                        'order_id': order_id,
-                        'tracking_number': tracking_number,
-                        'total_amount': float(total_amount),
-                        'full_name': delivery_info.get('full_name', user_data[1]),
-                        'delivery_method': delivery_info.get('delivery_method', 'delivery'),
-                        'items_count': len(cart_items)
-                    }
-                    send_order_email(user_data[2], email_details)
-            except Exception as email_err:
-                logger.error(f"Error preparing order email: {str(email_err)}")
+                conn = database.get_db_connection()
+                cur = conn.cursor()
 
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Error processing ITN: {str(e)}")
-            return "Error", 500
-        finally:
-            database.return_db_connection(conn)
+                cur.execute('''
+                    SELECT user_id, total_amount, cart_items_json, delivery_info_json
+                    FROM pending_orders
+                    WHERE id = %s
+                ''', (pending_order_id,))
+                pending_order = cur.fetchone()
+
+                if not pending_order:
+                    # Might have been processed already (idempotency check)
+                    logger.warning("Pending order not found (possibly already processed)")
+                    database.return_db_connection(conn)
+                    return "OK", 200 # Acknowledge to stop PayFast retrying if it's done
+
+                if pending_order[0] != user_id:
+                     logger.warning("Invalid order or user mismatch")
+                     database.return_db_connection(conn)
+                     return "Invalid order", 400
+
+                total_amount = pending_order[1]
+                cart_items = json.loads(pending_order[2])
+                delivery_info = json.loads(pending_order[3]) if pending_order[3] else {}
+
+                for item in cart_items:
+                    cur.execute('''
+                        SELECT remaining_quantity
+                        FROM products
+                        WHERE id = %s
+                    ''', (item['product_id'],))
+                    res = cur.fetchone()
+                    remaining = res[0] if res else 0
+                    if remaining < item['quantity']:
+                        logger.warning(f"Not enough stock for product {item['product_id']}")
+                        database.return_db_connection(conn)
+                        return "Stock unavailable", 400
+
+                # Generate unique tracking number
+                tracking_number = generate_tracking_number()
+                
+                cur.execute('''
+                    INSERT INTO orders (
+                        user_id, tracking_number, total_amount, delivery_method, full_name, phone,
+                        street_address, suburb, city, province, postal_code,
+                        delivery_fee, pickup_date, status
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'processing')
+                    RETURNING id
+                ''', (
+                    user_id,
+                    tracking_number,
+                    total_amount,
+                    delivery_info.get('delivery_method', 'delivery'),
+                    delivery_info.get('full_name'),
+                    delivery_info.get('phone'),
+                    delivery_info.get('street_address'),
+                    delivery_info.get('suburb'),
+                    delivery_info.get('city'),
+                    delivery_info.get('province'),
+                    delivery_info.get('postal_code'),
+                    delivery_info.get('delivery_fee', 0),
+                    delivery_info.get('pickup_date')
+                ))
+                order_id = cur.fetchone()[0]
+
+                for item in cart_items:
+                    cur.execute('''
+                        INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
+                        VALUES (%s, %s, %s, %s)
+                    ''', (order_id, item['product_id'], item['quantity'], item['price']))
+
+                for item in cart_items:
+                    cur.execute('''
+                        UPDATE products 
+                        SET remaining_quantity = remaining_quantity - %s
+                        WHERE id = %s
+                    ''', (item['quantity'], item['product_id']))
+
+                cur.execute('''
+                    DELETE FROM cart_items 
+                    WHERE user_id = %s
+                ''', (user_id,))
+
+                cur.execute('''
+                    DELETE FROM pending_orders
+                    WHERE id = %s
+                ''', (pending_order_id,))
+
+                conn.commit()
+                
+                # Check for low stock after transaction is committed
+                try:
+                    for item in cart_items:
+                        cur.execute('SELECT name, remaining_quantity FROM products WHERE id = %s', (item['product_id'],))
+                        prod_data = cur.fetchone()
+                        if prod_data and prod_data[1] <= 5:
+                            send_inventory_alert(prod_data[0], prod_data[1])
+                except Exception as e:
+                    logger.error(f"Error checking stock alerts: {e}")
+                        
+                logger.info("Order completed successfully")
+
+                # Send confirmation email
+                try:
+                    user_data = database.get_user_by_id(user_id)
+                    if user_data:
+                        email_details = {
+                            'order_id': order_id,
+                            'tracking_number': tracking_number,
+                            'total_amount': float(total_amount),
+                            'full_name': delivery_info.get('full_name', user_data[1]),
+                            'delivery_method': delivery_info.get('delivery_method', 'delivery'),
+                            'items_count': len(cart_items)
+                        }
+                        send_order_email(user_data[2], email_details)
+                except Exception as email_err:
+                    logger.error(f"Error preparing order email: {str(email_err)}")
+                
+                # Success - Exit loop and function
+                database.return_db_connection(conn)
+                return "OK", 200
+
+            except Exception as e:
+                logger.error(f"Error processing ITN (Attempt {attempt+1}): {str(e)}")
+                if conn:
+                    conn.rollback()
+                    database.return_db_connection(conn)
+                
+                # If it's a DB error, force pool reset and retry
+                if attempt < max_retries - 1:
+                    logger.info("Resetting DB pool and retrying...")
+                    database.close_pool()
+                    continue
+                
+                return "Error", 500
 
     return "OK", 200
 
