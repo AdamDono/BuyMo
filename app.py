@@ -76,11 +76,12 @@ PAYFAST_CANCEL_URL = "https://buymo.onrender.com/cart"
 PAYFAST_NOTIFY_URL = "https://buymo.onrender.com/payfast/notify"
 
 # Mail Configuration
-app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+# Mail Configuration
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp-relay.brevo.com')
 app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
 app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'False').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'adamdono100@gmail.com')
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'adamdono100@gmail.com')
 app.config['MAIL_DEBUG'] = True
@@ -171,12 +172,45 @@ def generate_tracking_number():
     return f"BM-{date_str}-{random_str}"
 
 def send_async_email(app, msg):
-    """Send email in a background thread to prevent worker timeouts"""
+    """Send email using Brevo API (HTTP) or fallback to IPv4 SMTP"""
     with app.app_context():
+        # Option A: Brevo (Sendinblue) - HTTP API (Bypasses all Firewalls)
+        brevo_key = os.getenv('BREVO_API_KEY')
+        if brevo_key:
+            try:
+                logger.info(f"THREAD START: Sending via Brevo API to {msg.recipients}")
+                url = "https://api.brevo.com/v3/smtp/email"
+                headers = {
+                    "accept": "application/json",
+                    "api-key": brevo_key,
+                    "content-type": "application/json"
+                }
+                
+                # Format for Brevo
+                payload = {
+                    "sender": {"name": "BuyMo", "email": app.config.get('MAIL_USERNAME', 'adamdono100@gmail.com')},
+                    "to": [{"email": r} for r in msg.recipients],
+                    "subject": msg.subject,
+                    "htmlContent": msg.html
+                }
+                
+                response = requests.post(url, json=payload, headers=headers, timeout=10)
+                
+                if response.status_code in [200, 201, 202]:
+                    logger.info(f"✓ THREAD SUCCESS: Email sent via Brevo! ID: {response.json().get('messageId')}")
+                    return
+                else:
+                    logger.error(f"✗ THREAD ERROR: Brevo API failed {response.status_code}")
+                    logger.error(f"  Response: {response.text}")
+                    # Fall through to SMTP if Brevo fails
+            except Exception as e:
+                logger.error(f"✗ THREAD ERROR: Brevo Request failed: {str(e)}")
+
+        # Option B: Standard SMTP (Fallback)
         try:
             server = app.config.get('MAIL_SERVER')
             port = app.config.get('MAIL_PORT')
-            logger.info(f"THREAD START: Attempting email to {msg.recipients} via {server}:{port}")
+            logger.info(f"THREAD START: Attempting SMTP to {msg.recipients} via {server}:{port}")
             
             # Use the mail instance to send
             mail.send(msg)
@@ -185,7 +219,12 @@ def send_async_email(app, msg):
         except socket.timeout:
             logger.error(f"THREAD TIMEOUT: Connection to {server} took too long.")
         except Exception as e:
-            logger.error(f"THREAD ERROR: Failed to deliver to {msg.recipients}: {str(e)}")
+            recipients = "Unknown Recipient"
+            try:
+                recipients = msg.recipients
+            except:
+                pass
+            logger.error(f"THREAD ERROR: Failed to deliver to {recipients}: {str(e)}")
 
 def send_order_email(user_email, order_details):
     """Send order confirmation email to customer via Gmail SMTP (Async)"""
@@ -1107,6 +1146,64 @@ def payfast_return():
                 # Clear cart count cache
                 cache_key = f'cart_count_{user.id}'
                 session.pop(cache_key, None)
+
+                # --- LOCALHOST DEV FIX: Simulate ITN for local testing ---
+                if 'localhost' in request.host or '127.0.0.1' in request.host:
+                    pending_order_id = request.args.get('m_payment_id')
+                    if pending_order_id:
+                        conn = database.get_db_connection()
+                        try:
+                            cur = conn.cursor()
+                            cur.execute('SELECT user_id, total_amount, cart_items_json, delivery_info_json FROM pending_orders WHERE id = %s', (pending_order_id,))
+                            pending_order = cur.fetchone()
+                            
+                            if pending_order: # Only proceed if pending order still exists
+                                total_amount = pending_order[1]
+                                cart_items = json.loads(pending_order[2])
+                                delivery_info = json.loads(pending_order[3]) if pending_order[3] else {}
+                                tracking_number = generate_tracking_number()
+
+                                cur.execute('''
+                                    INSERT INTO orders (user_id, total_amount, status, tracking_link, shipping_address, city, province, postal_code, delivery_fee)
+                                    VALUES (%s, %s, 'processing', %s, %s, %s, %s, %s, %s)
+                                    RETURNING id
+                                ''', (user.id, total_amount, tracking_number, 
+                                      delivery_info.get('address'), delivery_info.get('city'), 
+                                      delivery_info.get('province'), delivery_info.get('postal_code'), 50.00))
+                                order_id = cur.fetchone()[0]
+
+                                for item in cart_items:
+                                    cur.execute('''
+                                        INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
+                                        VALUES (%s, %s, %s, %s)
+                                    ''', (order_id, item['product_id'], item['quantity'], item['price']))
+                                    
+                                    # Update product stock
+                                    cur.execute('UPDATE products SET remaining_quantity = remaining_quantity - %s WHERE id = %s', 
+                                              (item['quantity'], item['product_id']))
+
+                                cur.execute('DELETE FROM cart_items WHERE user_id = %s', (user.id,))
+                                cur.execute('DELETE FROM pending_orders WHERE id = %s', (pending_order_id,))
+                                conn.commit()
+                                data_cache.clear() # Invalidate cache for stock updates
+
+                                # Send Email
+                                email_details = {
+                                    'order_id': order_id,
+                                    'tracking_number': tracking_number,
+                                    'total_amount': float(total_amount),
+                                    'full_name': delivery_info.get('full_name', user.username),
+                                    'delivery_method': 'delivery',
+                                    'items_count': len(cart_items)
+                                }
+                                send_order_email(user.email, email_details)
+                                flash('Dev Mode: Order auto-completed and email sent!', 'info')
+                        except Exception as e:
+                            logger.error(f"Dev Mode Error: {e}")
+                            conn.rollback()
+                        finally:
+                            database.return_db_connection(conn)
+                # ---------------------------------------------------------
                 
                 flash('Order placed successfully! Check your orders page for details.', 'success')
                 return redirect(url_for('orders'))
@@ -1879,6 +1976,24 @@ def admin_update_order_status(order_id):
             ''', (new_status, order_id))
             
         conn.commit()
+        
+        # Send status update email
+        if user_info:
+            send_order_status_email(
+                user_email=user_info[0],
+                username=user_info[1],
+                order_id=order_id,
+                status=new_status,
+                driver_name=driver_name,
+                driver_phone=driver_phone,
+                tracking_link=tracking_link,
+                shipped_date=shipped_date,
+                estimated_delivery_date=estimated_delivery_date,
+                delivered_at=delivered_at if new_status == 'delivered' else None,
+                proof_of_delivery=proof_of_delivery if new_status == 'delivered' else None,
+                delivery_notes=delivery_notes if new_status == 'delivered' else None
+            )
+
         flash(f'Order #{order_id} status updated to {new_status.title()}!', 'success')
     except Exception as e:
         conn.rollback()
