@@ -415,6 +415,18 @@ def inject_cart_count():
 
 
 # Routes
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+@app.route('/refunds')
+def refunds():
+    return render_template('refunds.html')
+
 @app.route('/')
 def index():
     """Landing page with featured products and categories"""

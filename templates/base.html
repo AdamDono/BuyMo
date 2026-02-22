@@ -5,6 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}BuyMo{% endblock %}</title>
+    <!-- SEO & Social Media Previews -->
+    <meta name="description"
+        content="BuyMo - Shop Smarter, Live Better. The premium marketplace for Electronics, Groceries, and more.">
+    <meta property="og:title" content="BuyMo - Shop Smarter, Live Better">
+    <meta property="og:description"
+        content="Discover amazing products at unbeatable prices on South Africa's newest marketplace.">
+    <meta property="og:image" content="{{ url_for('static', filename='images/og-preview.png', _external=True) }}">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="BuyMo - Shop Smarter, Live Better">
+    <meta name="twitter:image" content="{{ url_for('static', filename='images/og-preview.png', _external=True) }}">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sign.css') }}">
@@ -22,7 +35,16 @@
         {% block content %}{% endblock %}
     </main>
 
-    <footer style="text-align: center; padding: 15px 0; color: #888; margin-top: auto; font-size: 0.85rem;">
+    <footer
+        style="text-align: center; padding: 30px 0; color: #888; border-top: 1px solid #eee; margin-top: 50px; font-size: 0.85rem;">
+        <div style="margin-bottom: 20px;">
+            <a href="{{ url_for('contact') }}" style="color: #666; text-decoration: none; margin: 0 15px;">Contact
+                Us</a>
+            <a href="{{ url_for('privacy') }}" style="color: #666; text-decoration: none; margin: 0 15px;">Privacy
+                Policy</a>
+            <a href="{{ url_for('refunds') }}" style="color: #666; text-decoration: none; margin: 0 15px;">Refund
+                Policy</a>
+        </div>
         <p style="margin: 0; font-weight: 500; letter-spacing: 0.5px;">BuyMo@2026</p>
     </footer>
 
