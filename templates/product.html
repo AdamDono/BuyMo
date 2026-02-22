@@ -133,6 +133,11 @@
 
 {% block content %}
 <div class="product-container">
+  <div class="mb-4">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-chevron-left"></i> Back
+    </a>
+  </div>
   <div class="product-main">
     <div class="product-image">
       <img src="{{ product[4] | resolve_image }}" alt="{{ product[1] }}">
