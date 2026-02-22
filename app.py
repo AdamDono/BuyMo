@@ -434,9 +434,10 @@ def index():
             conn = database.get_db_connection()
             cur = conn.cursor()
             
-            # 1. Get featured products + ratings in one query
+            # 1. Get one product per category + ratings (Featured Products)
             cur.execute('''
-                SELECT p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
+                SELECT DISTINCT ON (c.id) 
+                       p.id, p.name, p.price, p.description, p.image, c.name, p.remaining_quantity,
                        COALESCE(r.avg_rating, 0), COALESCE(r.review_count, 0)
                 FROM products p
                 JOIN categories c ON p.category_id = c.id
@@ -445,15 +446,15 @@ def index():
                     FROM reviews
                     GROUP BY product_id
                 ) r ON p.id = r.product_id
-                ORDER BY p.id DESC
-                LIMIT 8
+                ORDER BY c.id, p.id DESC
+                LIMIT 12
             ''')
-            raw_featured = cur.fetchall()
-            
+            featured_rows = cur.fetchall()
             featured_products = []
             avg_ratings = {}
             review_counts = {}
-            for p in raw_featured:
+            
+            for p in featured_rows:
                 featured_products.append(p[:7])
                 avg_ratings[p[0]] = round(float(p[7]), 1)
                 review_counts[p[0]] = p[8]
