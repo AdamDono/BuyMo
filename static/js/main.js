@@ -129,45 +129,79 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Auto-submit search and filters for "instant" feel
+    // Truly Instant Search & Filters (AJAX - no page reload)
     const searchForm = document.querySelector('.search-form');
     const filterForm = document.querySelector('.filter-form');
+    const productsContainer = document.querySelector('.products');
     
-    if (searchForm && filterForm) {
+    if (searchForm && filterForm && productsContainer) {
         const queryInput = searchForm.querySelector('input[name="query"]');
         const filterInputs = filterForm.querySelectorAll('select, input');
         
-        // Debounce function to limit rapid submissions
         let debounceTimer;
-        const debounceSubmit = () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                // Combine query and filters for full filtering
-                const params = new URLSearchParams(new FormData(filterForm));
-                params.set('query', queryInput.value);
-                window.location.href = `${window.location.pathname}?${params.toString()}`;
-            }, 500); // 500ms delay
+        const performInstantSearch = async () => {
+            // Give visual feedback
+            productsContainer.style.opacity = '0.5';
+            productsContainer.style.pointerEvents = 'none';
+
+            // Gather all params from both forms
+            const searchData = new FormData(searchForm);
+            const filterData = new FormData(filterForm);
+            const params = new URLSearchParams();
+            
+            // Merge both
+            for (const [key, value] of searchData) params.append(key, value);
+            for (const [key, value] of filterData) params.append(key, value);
+            
+            const url = `${window.location.pathname}?${params.toString()}`;
+            
+            try {
+                const response = await fetch(url);
+                const html = await response.text();
+                
+                // Parse the new page and extract only the products grid
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newProducts = doc.querySelector('.products');
+                
+                if (newProducts) {
+                    productsContainer.innerHTML = newProducts.innerHTML;
+                    // Update the URL in the browser without reloading
+                    window.history.replaceState(null, '', url);
+                }
+            } catch (error) {
+                console.error('Instant search failed:', error);
+            } finally {
+                productsContainer.style.opacity = '1';
+                productsContainer.style.pointerEvents = 'auto';
+            }
         };
 
-        // When user types in search
+        const debounceSubmit = () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(performInstantSearch, 300); // Faster reaction (300ms)
+        };
+
         queryInput.addEventListener('input', debounceSubmit);
 
-        // When user changes a category or price
         filterInputs.forEach(input => {
             input.addEventListener('input', () => {
-                // For select, we can submit immediately, for numbers debounce
                 if (input.tagName === 'SELECT') {
-                    const params = new URLSearchParams(new FormData(filterForm));
-                    params.set('query', queryInput.value);
-                    window.location.href = `${window.location.pathname}?${params.toString()}`;
+                    performInstantSearch(); // Instant for dropdown
                 } else {
-                    debounceSubmit();
+                    debounceSubmit(); // Debounced for numbers
                 }
             });
         });
 
-        // Prevent Enter from doing a default form submit (let our logic handle it)
-        searchForm.addEventListener('submit', (e) => e.preventDefault());
-        filterForm.addEventListener('submit', (e) => e.preventDefault());
+        // Prevent full form submissions
+        searchForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            performInstantSearch();
+        });
+        filterForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            performInstantSearch();
+        });
     }
 });
