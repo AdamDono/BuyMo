@@ -135,6 +135,14 @@ def create_tables():
         );
     ''')
     
+    # Pre-populate categories if empty
+    cur.execute('SELECT COUNT(*) FROM categories;')
+    if cur.fetchone()[0] == 0:
+        default_categories = ['Electronics', 'Headsets', 'Watches', 'Accessories', 'Audio', 'Wearables']
+        for cat in default_categories:
+            cur.execute('INSERT INTO categories (name) VALUES (%s) ON CONFLICT DO NOTHING;', (cat,))
+        print("Default categories populated.")
+    
     # Products table
     cur.execute('''
         CREATE TABLE IF NOT EXISTS products (
