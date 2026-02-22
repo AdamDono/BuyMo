@@ -128,4 +128,46 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+    
+    // Auto-submit search and filters for "instant" feel
+    const searchForm = document.querySelector('.search-form');
+    const filterForm = document.querySelector('.filter-form');
+    
+    if (searchForm && filterForm) {
+        const queryInput = searchForm.querySelector('input[name="query"]');
+        const filterInputs = filterForm.querySelectorAll('select, input');
+        
+        // Debounce function to limit rapid submissions
+        let debounceTimer;
+        const debounceSubmit = () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                // Combine query and filters for full filtering
+                const params = new URLSearchParams(new FormData(filterForm));
+                params.set('query', queryInput.value);
+                window.location.href = `${window.location.pathname}?${params.toString()}`;
+            }, 500); // 500ms delay
+        };
+
+        // When user types in search
+        queryInput.addEventListener('input', debounceSubmit);
+
+        // When user changes a category or price
+        filterInputs.forEach(input => {
+            input.addEventListener('input', () => {
+                // For select, we can submit immediately, for numbers debounce
+                if (input.tagName === 'SELECT') {
+                    const params = new URLSearchParams(new FormData(filterForm));
+                    params.set('query', queryInput.value);
+                    window.location.href = `${window.location.pathname}?${params.toString()}`;
+                } else {
+                    debounceSubmit();
+                }
+            });
+        });
+
+        // Prevent Enter from doing a default form submit (let our logic handle it)
+        searchForm.addEventListener('submit', (e) => e.preventDefault());
+        filterForm.addEventListener('submit', (e) => e.preventDefault());
+    }
 });
