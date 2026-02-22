@@ -138,7 +138,13 @@ def create_tables():
     # Pre-populate categories if empty
     cur.execute('SELECT COUNT(*) FROM categories;')
     if cur.fetchone()[0] == 0:
-        default_categories = ['Electronics', 'Headsets', 'Watches', 'Accessories', 'Audio', 'Wearables']
+        default_categories = [
+            'Electronics', 'Clothing & Apparel', 'Home & Kitchen', 
+            'Groceries & Food', 'Beauty & Personal Care', 'Watches', 
+            'Headsets', 'Audio', 'Wearables', 'Sports & Outdoors',
+            'Toys & Games', 'Health & Household', 'Accessories',
+            'Automotive', 'Tools & DIY', 'Books & Media'
+        ]
         for cat in default_categories:
             cur.execute('INSERT INTO categories (name) VALUES (%s) ON CONFLICT DO NOTHING;', (cat,))
         print("Default categories populated.")
